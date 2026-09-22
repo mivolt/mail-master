@@ -225,8 +225,13 @@ src/
 
 **代码约定**
 
-- 改完必须过 `npm run typecheck` 与 `npm test`
-- **提交前请阅读 [AGENTS.md](AGENTS.md)**，里面记录了产品取舍原则、界面设计原则，以及这个项目踩过的十几个技术坑（imapflow 的错误包装、Vue 响应式对象过不了 contextBridge、弹窗的 `@click.self` 陷阱等），能省你不少时间
+- 改完必须过 `npm test`（它会依次跑标准检查、类型检查、核心测试、集成测试）
+- 改动依赖、打包配置或 CI 之后，先单独跑一次 `npm run preflight`——它把项目里
+  踩过的坑固化成了可执行检查（锁文件来源、发布参数、产物命名、必需资源、
+  gitignore 覆盖等），失败时会直接给出修复方式
+- **提交前请阅读 [AGENTS.md](AGENTS.md)**，里面记录了产品取舍原则、界面设计原则，
+  以及这个项目踩过的技术坑（imapflow 的错误包装、Vue 响应式对象过不了 contextBridge、
+  弹窗的 `@click.self` 陷阱等），能省你不少时间
 - 涉及界面的改动，请说明改前改后的体感差异
 
 **提交 Issue 时**
@@ -242,10 +247,14 @@ src/
 ## 测试
 
 ```bash
+npm run preflight          # 标准检查：锁文件来源、发布参数、产物命名、资源、gitignore
 npm run test:core          # MIME 解析 + SMTP 发信 + IMAP 同步 + 错误还原（92 项）
 npm run test:integration   # 真实 Electron + 假 IMAP/SMTP 服务器走完整界面流程（115 项）
-npm test                   # 类型检查 + 上面两项
+npm test                   # 上面三项 + 类型检查
 ```
+
+`npm run preflight` 把项目里踩过的坑固化成了可执行检查——不遵守就会失败，
+并给出修复方式。新增标准时请写成检查而不是只写在文档里。
 
 两套自动化测试都不依赖真实邮箱账号，使用独立 `--user-data-dir`，不会污染真实应用数据。
 

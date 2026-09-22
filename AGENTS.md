@@ -3,6 +3,28 @@
 macOS 多账号邮件客户端。Electron 44 + Vue 3 + TypeScript + electron-vite，
 基于 IMAP / SMTP 通用协议。
 
+## 提交前标准（已固化为可执行检查）
+
+`npm run preflight` 会把这些全跑一遍，它接在 `npm test` 与 CI 门禁里。
+**这些不是风格偏好，是会导致构建失败、发布出错或泄露信息的硬性要求。**
+
+> **元规则：新增标准时，写成 `scripts/preflight.mjs` 里的一项检查，不要只写在这里。**
+> 文档是被动的，下次照样会踩；检查是主动的，跑一次就知道。
+
+| 标准 | 不遵守的后果 |
+| --- | --- |
+| `package-lock.json` 的下载源必须是公网源 | 私有源 CI 访问不到，`npm ci` 直接失败 |
+| `package.json` 与 `package-lock.json` 版本一致 | `npm ci` 校验不过 |
+| `dist:*` 脚本都带 `--publish never` | CI 里 electron-builder 隐式发布失败 |
+| `artifactName` 不含空格 | CI 的 artifact 中转把空格换成点，文件名变形 |
+| 必需资源文件都存在 | 打包失败或图标丢失 |
+| 图标已内联进主进程产物 | 打包后资源定位不到 |
+| CI 里每处 electron-builder 调用都带 `--publish never` | 发布失败，而本地测不出来 |
+| `.gitignore` 覆盖 `verify/`、`release/`、`out/` | 真实邮箱截图与安装包进公开仓库 |
+
+每项检查都配了修复提示，失败时直接照做即可。改动依赖、打包配置或 CI 之后，
+先跑一次 `npm run preflight` 再提交。
+
 ## 工作节奏
 
 **不要每次改完代码就打包 DMG。** 开发阶段只跑类型检查与测试：
@@ -71,6 +93,8 @@ npx electron-builder --mac -c.mac.identity=null
 
 ## 关键技术坑（踩过的）
 
+> 标 ⚙️ 的已经变成 `npm run preflight` 里的自动检查，不靠记忆，会主动拦住。
+
 - **imapflow**：服务器返回 NO/BAD 时统一抛 `Command failed`，真实原因在
   `responseText` / `executedCommand` / `authenticationFailed` 上，必须还原后展示
 - **imapflow**：每次 SELECT / 重新打开邮箱都会因计数变化发 `exists`，不能直接用
@@ -110,7 +134,7 @@ npx electron-builder --mac -c.mac.identity=null
 - **测试骨架要能在中断时输出已收集的结果**：结果原本只在末尾统一打印，
   一旦中途抛异常就什么都看不到，定位不到失败位置。已加 `uncaughtException`
   处理，中断时也会打印已跑过的检查项。
-- **`package-lock.json` 必须指向公网源**：本机 `~/.npmrc` 指向公司私有 nexus，
+- ⚙️ **`package-lock.json` 必须指向公网源**：本机 `~/.npmrc` 指向公司私有 nexus，
   npm 会把下载地址写进 lockfile。GitHub Actions 的机器访问不到 nexus，
   `npm ci` 会直接失败。**改动依赖后记得检查** lockfile 里的 `resolved` 是否
   又变回 nexus，是的话替换前缀为 `https://registry.npmjs.org/`。
@@ -121,10 +145,10 @@ npx electron-builder --mac -c.mac.identity=null
   主进程又没有 canvas，所以数字是预先生成在 `resources/badges/` 下的。
 - **Windows 目标可在 macOS 上交叉构建**，产出 NSIS 安装包不需要 wine
   （已实测）。但**无法在本机验证它真能运行**，需要 Windows 机器实测。
-- **electron-builder 在 CI 里会「隐式发布」**：检测到 git tag 就自己去建 Release，
+- ⚙️ **electron-builder 在 CI 里会「隐式发布」**：检测到 git tag 就自己去建 Release，
   而它需要 `GH_TOKEN`，未设置会直接失败——症状很迷惑，因为**产物其实已经构建成功了**，
   报错发生在构建之后。打包命令必须加 `--publish never`。
-- **产物文件名不要带空格**：GitHub Actions 的 artifact 中转会把空格替换成点，
+- ⚙️ **产物文件名不要带空格**：GitHub Actions 的 artifact 中转会把空格替换成点，
   发布出来的名字与本地不一致（`Mail Master-x.dmg` → `Mail.Master-x.dmg`）。
   已在 `electron-builder.yml` 里显式指定带连字符的 `artifactName`。
 - **环境**：用户 `~/.npmrc` 是私有 nexus 源，会剥掉 electron 包的 `scripts` 字段

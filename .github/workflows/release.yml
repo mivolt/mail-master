@@ -27,6 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 最快的一道门禁：纯文件检查，几秒就能拦住锁文件源、发布参数、
+      # 产物命名、必需资源、gitignore 覆盖这类问题，不用等打包跑完
+      - name: 标准检查
+        run: node scripts/preflight.mjs
+
       - name: 解析版本号与 tag
         id: meta
         run: |
