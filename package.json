@@ -20,11 +20,11 @@
     "test:live": "npm run build && node scripts/live-test.mjs",
     "verify:package": "node scripts/verify-package.mjs",
     "verify:package-ui": "node scripts/verify-packaged-ui.mjs",
-    "dist:mac": "electron-vite build && electron-builder --mac --arm64 -c.mac.identity=null",
-    "dist:mac:x64": "electron-vite build && electron-builder --mac --x64 -c.mac.identity=null",
-    "dist:mac:all": "electron-vite build && electron-builder --mac --arm64 --x64 -c.mac.identity=null",
-    "dist:win": "electron-vite build && electron-builder --win --x64",
-    "dist:win:arm64": "electron-vite build && electron-builder --win --arm64"
+    "dist:mac": "electron-vite build && electron-builder --mac --arm64 -c.mac.identity=null --publish never",
+    "dist:mac:x64": "electron-vite build && electron-builder --mac --x64 -c.mac.identity=null --publish never",
+    "dist:mac:all": "electron-vite build && electron-builder --mac --arm64 --x64 -c.mac.identity=null --publish never",
+    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never",
+    "dist:win:arm64": "electron-vite build && electron-builder --win --arm64 --publish never"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
