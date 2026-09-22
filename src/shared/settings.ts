@@ -68,6 +68,23 @@ export const SETTINGS: SettingDefinition[] = [
     default: 'true'
   },
   {
+    key: 'notifyNewMail',
+    group: 'general',
+    label: '新邮件时发送系统通知',
+    description:
+      '窗口不在前台时通过系统通知提醒，点击可直达那封邮件。窗口就在眼前时只用应用内提示，不会重复打扰。',
+    type: 'toggle',
+    default: 'true'
+  },
+  {
+    key: 'showTrayIcon',
+    group: 'general',
+    label: '在菜单栏常驻图标',
+    description: '菜单栏显示一个信封图标与未读数，点击即可唤出主窗口。不想菜单栏多一个图标就关掉。',
+    type: 'toggle',
+    default: 'false'
+  },
+  {
     key: 'launchAtLogin',
     group: 'general',
     label: '开机时自动启动',
@@ -81,6 +98,8 @@ export interface AppSettings {
   syncWindow: number
   bodyPrefetch: number
   blockRemoteImages: boolean
+  notifyNewMail: boolean
+  showTrayIcon: boolean
   launchAtLogin: boolean
 }
 
@@ -88,6 +107,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   syncWindow: 300,
   bodyPrefetch: 40,
   blockRemoteImages: true,
+  notifyNewMail: true,
+  showTrayIcon: false,
   launchAtLogin: false
 }
 
@@ -106,6 +127,10 @@ export function parseSettings(raw: Record<string, string>): AppSettings {
       raw.blockRemoteImages === undefined
         ? DEFAULT_SETTINGS.blockRemoteImages
         : raw.blockRemoteImages === 'true',
+    notifyNewMail:
+      raw.notifyNewMail === undefined ? DEFAULT_SETTINGS.notifyNewMail : raw.notifyNewMail === 'true',
+    showTrayIcon:
+      raw.showTrayIcon === undefined ? DEFAULT_SETTINGS.showTrayIcon : raw.showTrayIcon === 'true',
     launchAtLogin:
       raw.launchAtLogin === undefined
         ? DEFAULT_SETTINGS.launchAtLogin

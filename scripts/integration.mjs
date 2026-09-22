@@ -7,6 +7,7 @@ import { _electron as electron } from 'playwright-core'
 import MailComposer from 'nodemailer/lib/mail-composer'
 import { SMTPServer } from 'smtp-server'
 import { simpleParser } from 'mailparser'
+import { ImapFlow } from 'imapflow'
 
 const require = createRequire(import.meta.url)
 const hoodiecrow = require('hoodiecrow-imap')
@@ -21,12 +22,73 @@ function check(name, condition, detail = '') {
   results.push({ name, ok: Boolean(condition), detail })
 }
 
+function printResults() {
+  const failed = results.filter((item) => !item.ok)
+  console.log('')
+  for (const item of results) {
+    console.log(`${item.ok ? 'PASS' : 'FAIL'}  ${item.name}${item.detail ? `  → ${item.detail}` : ''}`)
+  }
+  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
+  if (failed.length > 0) {
+    console.log(`失败项：${failed.map((item) => item.name).join('、')}`)
+    process.exitCode = 1
+  }
+}
+
+// 中断时也要把已收集的检查项打出来，否则定位不到失败位置
+process.on('uncaughtException', (error) => {
+  console.error(`\n测试中断：${error?.message ?? error}`)
+  printResults()
+  process.exit(1)
+})
+
 function buildRaw(options) {
   const composer = new MailComposer(options)
   return new Promise((resolve, reject) => {
     composer.compile().build((error, message) => (error ? reject(error) : resolve(message)))
   })
 }
+
+/**
+ * 自签证书，供两个假服务器共用。
+ *
+ * hoodiecrow 自带的那份是 2015 年签发的，**已于 2025-02-09 过期**——
+ * 应用侧因为测试时设了 NODE_TLS_REJECT_UNAUTHORIZED=0 才没暴露，
+ * 但测试进程自己发起的连接会直接报 CERT_HAS_EXPIRED。
+ */
+function ensureTlsCert() {
+  const dir = join(root, 'verify', 'tls')
+  const keyPath = join(dir, 'key.pem')
+  const certPath = join(dir, 'cert.pem')
+  const valid = (() => {
+    if (!existsSync(keyPath) || !existsSync(certPath)) return false
+    try {
+      execFileSync('openssl', ['x509', '-in', certPath, '-noout', '-checkend', '86400'], {
+        stdio: 'ignore'
+      })
+      return true
+    } catch {
+      return false
+    }
+  })()
+
+  if (!valid) {
+    mkdirSync(dir, { recursive: true })
+    execFileSync(
+      'openssl',
+      [
+        'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+        '-keyout', keyPath, '-out', certPath,
+        '-days', '365', '-subj', '/CN=localhost',
+        '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'
+      ],
+      { stdio: 'ignore' }
+    )
+  }
+  return { key: readFileSync(keyPath), cert: readFileSync(certPath) }
+}
+
+const tls = ensureTlsCert()
 
 const messages = await Promise.all([
   buildRaw({
@@ -55,6 +117,8 @@ const server = hoodiecrow({
   plugins: ['ID', 'SASL-IR', 'AUTH-PLAIN', 'NAMESPACE', 'IDLE', 'ENABLE', 'LITERALPLUS', 'UNSELECT', 'SPECIAL-USE', 'CREATE-SPECIAL-USE'],
   id: { name: 'hoodiecrow', version: '1.0' },
   secureConnection: true,
+  // 用我们自己签的有效证书，替代它自带的那份（2025-02 已过期）
+  credentials: tls,
   // 界面添加账号时用户名由邮箱派生，这里两个都接受
   users: {
     testuser: { password: 'testpass' },
@@ -85,27 +149,6 @@ check('假 IMAP 服务器就绪', imapPort > 0, `127.0.0.1:${imapPort}`)
 
 // 本地 TLS SMTP 服务器：让「通过界面发信」也能真正跑通，
 // 从而覆盖写信页里响应式数组跨 IPC 的序列化问题
-function ensureTlsCert() {
-  const dir = join(root, 'verify', 'tls')
-  const keyPath = join(dir, 'key.pem')
-  const certPath = join(dir, 'cert.pem')
-  if (!existsSync(keyPath) || !existsSync(certPath)) {
-    mkdirSync(dir, { recursive: true })
-    execFileSync(
-      'openssl',
-      [
-        'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-        '-keyout', keyPath, '-out', certPath,
-        '-days', '365', '-subj', '/CN=localhost',
-        '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'
-      ],
-      { stdio: 'ignore' }
-    )
-  }
-  return { key: readFileSync(keyPath), cert: readFileSync(certPath) }
-}
-
-const tls = ensureTlsCert()
 const sentMessages = []
 const smtpServer = new SMTPServer({
   secure: true,
@@ -864,6 +907,108 @@ const unexpectedErrors = consoleErrors.filter(
 check('渲染层无非预期控制台错误', unexpectedErrors.length === 0, unexpectedErrors.join(' | '))
 check('渲染层无未捕获异常', pageErrors.length === 0, pageErrors.join(' | '))
 
+// 9. 菜单栏图标 / 系统通知 / Dock 角标
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+await page.locator('aside button', { hasText: '设置' }).first().click()
+await page.waitForSelector('.dialog-panel select[data-setting="syncWindow"]', { timeout: 8000 })
+
+const settingsPanel = await page.evaluate(() => document.querySelector('.dialog-panel').innerText)
+check('设置里有「新邮件时发送系统通知」', settingsPanel.includes('新邮件时发送系统通知'), '')
+check('设置里有「在菜单栏常驻图标」', settingsPanel.includes('在菜单栏常驻图标'), '')
+// 打个标记，用于判断渲染层是否被重载（重载会清掉它）
+await page.evaluate(() => {
+  window.__trayMarker = 'alive'
+})
+
+await page.locator('.dialog-panel button[data-setting="showTrayIcon"]').click()
+await page.waitForTimeout(800)
+const traySetting = await page.evaluate(() => window.api.settings.get())
+check('菜单栏图标开关可持久化', traySetting.showTrayIcon === true, JSON.stringify(traySetting))
+
+check(
+  '系统通知在当前平台可用',
+  (await app.evaluate(({ Notification }) => Notification.isSupported())) === true,
+  ''
+)
+
+const unreadNow = await page.evaluate(() => window.api.mail.unread())
+const badge = await app.evaluate(({ app }) => app.dock.getBadge())
+check('Dock 角标等于未读总数', badge === String(unreadNow.total), `角标=${badge} 未读=${unreadNow.total}`)
+
+const afterTrayState = await page.evaluate(() => ({
+  marker: window.__trayMarker ?? '(丢失)',
+  dialogs: document.querySelectorAll('.dialog-panel').length,
+  hasToggle: Boolean(document.querySelector('.dialog-panel button[data-setting="showTrayIcon"]'))
+}))
+check(
+  '开启菜单栏图标后渲染层未重载',
+  afterTrayState.marker === 'alive',
+  afterTrayState.marker
+)
+check(
+  '开启菜单栏图标后设置弹窗仍打开',
+  afterTrayState.hasToggle === true,
+  `弹窗数=${afterTrayState.dialogs}`
+)
+
+// 关掉菜单栏图标，避免影响后续（也验证能关）
+await page.locator('.dialog-panel button[data-setting="showTrayIcon"]').click()
+await page.waitForTimeout(600)
+check(
+  '菜单栏图标开关可关闭',
+  (await page.evaluate(() => window.api.settings.get())).showTrayIcon === false,
+  ''
+)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+
+// 10. 真实新邮件：用 IMAP APPEND 投一封，验证 IDLE 侦测、角标与提示
+const beforeNewMail = (await page.evaluate(() => window.api.mail.unread())).total
+const appendedRaw = await buildRaw({
+  from: '"新邮件发件人" <newcomer@example.com>',
+  to: 'me@example.com',
+  subject: '新到的邮件',
+  text: '这是一封刚刚投递进来的邮件。'
+})
+
+const appendClient = new ImapFlow({
+  host: '127.0.0.1',
+  port: imapPort,
+  secure: true,
+  auth: { user: 'me@example.com', pass: 'testpass' },
+  // 测试进程没有 Electron 那侧的 NODE_TLS_REJECT_UNAUTHORIZED=0，
+  // 这里只对这条连接放行自签证书
+  tls: { rejectUnauthorized: false },
+  logger: false
+})
+await appendClient.connect()
+await appendClient.append('INBOX', appendedRaw, ['\\Unseen'])
+await appendClient.logout()
+
+let afterNewMail = beforeNewMail
+for (let attempt = 0; attempt < 30; attempt += 1) {
+  await page.waitForTimeout(1000)
+  afterNewMail = (await page.evaluate(() => window.api.mail.unread())).total
+  if (afterNewMail > beforeNewMail) break
+}
+check(
+  '新邮件被 IDLE 侦测到并完成增量同步',
+  afterNewMail > beforeNewMail,
+  `未读 ${beforeNewMail} → ${afterNewMail}`
+)
+
+const badgeAfterNewMail = await app.evaluate(({ app }) => app.dock.getBadge())
+check(
+  'Dock 角标随新邮件更新',
+  badgeAfterNewMail === String(afterNewMail),
+  `角标=${badgeAfterNewMail} 未读=${afterNewMail}`
+)
+
+const newMailToast = await page.evaluate(() => document.body.innerText)
+check('新邮件在应用内出现提示', newMailToast.includes('收到'), '')
+await page.screenshot({ path: join(shotDir, '19-new-mail.png') })
+
 await app.close()
 await new Promise((resolve) => server.close(resolve))
 await new Promise((resolve) => smtpServer.close(resolve))
@@ -872,12 +1017,4 @@ const profileFiles = existsSync(profileDir) ? readdirSync(profileDir).length : 0
 check('测试使用独立 profile，未污染真实数据', profileFiles > 0, profileDir)
 rmSync(profileDir, { recursive: true, force: true })
 
-const failed = results.filter((item) => !item.ok)
-for (const item of results) {
-  console.log(`${item.ok ? 'PASS' : 'FAIL'}  ${item.name}${item.detail ? `  → ${item.detail}` : ''}`)
-}
-console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-if (failed.length > 0) {
-  console.log(`失败项：${failed.map((item) => item.name).join('、')}`)
-  process.exitCode = 1
-}
+printResults()

@@ -1,16 +1,47 @@
 import { app, BrowserWindow, session, shell } from 'electron'
 import { join } from 'node:path'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
+import { EV } from '@shared/channels'
 import { applyLaunchAtLogin } from './autostart'
 import { closeDatabase, initDatabase } from './db'
 import { readSettings } from './db/settings'
-import { attachEngineHooks, attachmentsDirFor, registerIpc } from './ipc'
+import { attachEngineHooks, attachmentsDirFor, refreshUnreadIndicators, registerIpc } from './ipc'
 import { MailEngine } from './mail/engine'
 import { initVault } from './security/vault'
+import { hideTray, showTray } from './tray'
 
 let mainWindow: BrowserWindow | null = null
 let engine: MailEngine | null = null
 let quitting = false
+
+/** 从菜单栏或通知唤回主窗口；窗口已被关闭时重新创建 */
+function openMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function applyTraySetting(): void {
+  if (!readSettings().showTrayIcon) {
+    hideTray()
+    return
+  }
+  showTray({
+    onOpen: openMainWindow,
+    onCompose: () => {
+      openMainWindow()
+      mainWindow?.webContents.send(EV.composeNew)
+    },
+    onSync: () => {
+      void engine?.syncAll()
+    },
+    onQuit: () => app.quit()
+  })
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -77,7 +108,12 @@ function bootstrap(): void {
       engine,
       getWindow: (): BrowserWindow | null => mainWindow,
       userDataDir,
-      attachmentsDir
+      attachmentsDir,
+      onSettingsChanged: (key: string): void => {
+        if (key !== 'showTrayIcon') return
+        applyTraySetting()
+        refreshUnreadIndicators()
+      }
     }
     registerIpc(ctx)
     attachEngineHooks(ctx)
@@ -88,6 +124,8 @@ function bootstrap(): void {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
 
+    applyTraySetting()
+    refreshUnreadIndicators()
     engine.startAll()
   })
 }
@@ -113,6 +151,7 @@ app.on('before-quit', (event) => {
   quitting = true
   void (async () => {
     try {
+      hideTray()
       await engine?.stopAll()
     } finally {
       closeDatabase()

@@ -177,6 +177,16 @@ export interface SyncProgress {
 export interface NewMailEvent {
   accountId: number
   count: number
+  /** 最新一封的 id 与摘要信息，用于系统通知与「点击直达该邮件」 */
+  latestMessageId?: number
+  latestFrom?: string
+  latestSubject?: string
+}
+
+/** 主进程要求渲染层打开某封邮件（系统通知点击后触发） */
+export interface OpenMessageEvent {
+  accountId: number
+  messageId: number
 }
 
 export interface AppInfo {

@@ -340,7 +340,17 @@ export class AccountWorker {
       const hadPriorSync = this.inboxKnownTotal >= 0
       this.inboxKnownTotal = meta.total
       if (hadPriorSync && freshCount > 0) {
-        this.hooks.onNewMail?.({ accountId: account.id, count: freshCount })
+        // 带上最新一封的信息，供系统通知展示与「点击直达」
+        const newest = fresh[fresh.length - 1]
+        const newestId = newest ? idByUid.get(newest.uid) : undefined
+        const row = newestId ? messagesRepo.getMessageRaw(newestId) : undefined
+        this.hooks.onNewMail?.({
+          accountId: account.id,
+          count: freshCount,
+          latestMessageId: newestId,
+          latestFrom: row ? row.from_name || row.from_addr : undefined,
+          latestSubject: row?.subject
+        })
       }
     }
 

@@ -8,6 +8,7 @@ import type {
   MessageDetail,
   MessageMeta,
   NewMailEvent,
+  OpenMessageEvent,
   SendInput,
   SendResult,
   StorageInfo,
@@ -69,5 +70,9 @@ export interface MailMasterApi {
     onProgress(cb: (payload: SyncProgress) => void): Unsubscribe
     onNewMail(cb: (payload: NewMailEvent) => void): Unsubscribe
     onSyncDone(cb: (payload: SyncResult) => void): Unsubscribe
+    /** 系统通知被点击：要求打开指定邮件 */
+    onOpenMessage(cb: (payload: OpenMessageEvent) => void): Unsubscribe
+    /** 菜单栏图标里点了「写邮件」 */
+    onComposeNew(cb: () => void): Unsubscribe
   }
 }

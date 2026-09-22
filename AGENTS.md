@@ -102,6 +102,14 @@ npx electron-builder --mac -c.mac.identity=null
   click 事件的 target 是遮罩，会被误判成「点了背景」而关掉弹窗。而拖拽选中正是
   「复制」的常规动作，用户会以为是粘贴把窗口弄没了。`Modal.vue` 里改成
   「按下与松开都必须发生在遮罩上」才关闭。
+- **hoodiecrow 自带证书已于 2025-02 过期**：应用侧因为测试时设了
+  `NODE_TLS_REJECT_UNAUTHORIZED=0` 才没暴露，但测试进程自己发起的连接会直接
+  报 `CERT_HAS_EXPIRED`。集成测试里改为传 `credentials: tls` 用自签的有效证书。
+- **系统集成调用要包 try/catch**：Dock 角标、菜单栏图标、系统通知都属于
+  OS 集成，失败（如未签名应用、图标资源异常）不应把应用带崩。
+- **测试骨架要能在中断时输出已收集的结果**：结果原本只在末尾统一打印，
+  一旦中途抛异常就什么都看不到，定位不到失败位置。已加 `uncaughtException`
+  处理，中断时也会打印已跑过的检查项。
 - **环境**：用户 `~/.npmrc` 是私有 nexus 源，会剥掉 electron 包的 `scripts` 字段
   导致二进制不下载，需手动跑 `node node_modules/electron/install.js` 并设 `ELECTRON_MIRROR`
 - **生图服务**会在图片右下角叠加品牌水印，`image_edit` 去不掉（属服务端后处理），

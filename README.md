@@ -53,6 +53,12 @@ macOS 多账号邮件客户端，基于 IMAP / SMTP 通用协议。把多个邮�
 - 回复 / 转发（自动补 `Re:` / `Fwd:` 前缀并引用原文）
 - 发件人显示名按 RFC 2047 正确编码
 
+**新邮件提醒**
+
+- **Dock 角标**：应用图标上显示未读总数
+- **系统通知**：窗口不在前台时通过系统通知提醒，**点击直达那封邮件**；窗口就在眼前时只用应用内提示，不会重复打扰
+- **菜单栏图标**（默认关闭，可在设置中开启）：常驻菜单栏并显示未读数，点击唤出主窗口，菜单里可快速写邮件 / 立即同步
+
 **出问题时**
 
 - 错误是醒目的红色区块，固定在按钮上方（滚动也一定看得见），带明确标题
@@ -63,6 +69,7 @@ macOS 多账号邮件客户端，基于 IMAP / SMTP 通用协议。把多个邮�
 
 - 每个文件夹保留邮件数、自动下载正文数量——直接影响磁盘占用与流量
 - 默认不加载远程图片——防追踪像素，单封邮件上仍可临时放行
+- 新邮件时是否发送系统通知、是否在菜单栏常驻图标
 - 开机时自动启动
 - 数据位置与占用统计、打开数据目录、一键清除全部本地数据（二次确认后重启）
 
@@ -166,6 +173,8 @@ src/
 │   │   ├── parser.ts         MIME 解析 + HTML 净化 + 渲染文档生成
 │   │   ├── diagnostics.ts    协议级脱敏的连接诊断报告
 │   │   └── errors.ts         把 imapflow 的通用报错还原成可行动的信息
+│   ├── tray.ts               菜单栏图标（模板图，自动适配深浅色）
+│   ├── notifications.ts      新邮件系统通知
 │   ├── db/                   node:sqlite（Electron 内置，无需原生编译）
 │   └── security/vault.ts     safeStorage（Keychain）加解密凭据
 ├── preload/index.ts          contextBridge 窄接口，输出 CJS 以兼容 sandbox
@@ -217,7 +226,7 @@ src/
 
 ```bash
 npm run test:core          # MIME 解析 + SMTP 发信 + IMAP 同步 + 错误还原（92 项）
-npm run test:integration   # 真实 Electron + 假 IMAP/SMTP 服务器走完整界面流程（104 项）
+npm run test:integration   # 真实 Electron + 假 IMAP/SMTP 服务器走完整界面流程（115 项）
 npm test                   # 类型检查 + 上面两项
 ```
 

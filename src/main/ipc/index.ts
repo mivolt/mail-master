@@ -33,6 +33,8 @@ import { buildEmailDocument, buildPlainTextDocument, sanitizeEmailHtml } from '.
 import { sendMail, verifySmtp, type SmtpConfig } from '../mail/smtp'
 import { decryptSecret, encryptSecret } from '../security/vault'
 import { clearAllData, storageInfo } from '../storage'
+import { notifyNewMail } from '../notifications'
+import { updateTrayUnread } from '../tray'
 
 function pickColor(): string {
   const existing = accountsRepo.listAccounts().length
@@ -127,6 +129,21 @@ export interface IpcContext {
   getWindow: () => BrowserWindow | null
   userDataDir: string
   attachmentsDir: string
+  /** 设置变更后的副作用（如开关菜单栏图标、开机自启） */
+  onSettingsChanged?: (key: string) => void
+}
+
+/** 未读数变化后同步 Dock 角标与菜单栏标题 */
+export function refreshUnreadIndicators(): void {
+  try {
+    const total = messagesRepo.unreadSummary().total
+    if (process.platform === 'darwin') {
+      app.dock?.setBadge(total > 0 ? String(total) : '')
+    }
+    updateTrayUnread(total)
+  } catch {
+    // Dock 角标与菜单栏属于系统集成，出问题不应影响应用本身
+  }
 }
 
 export function registerIpc(ctx: IpcContext): void {
@@ -189,6 +206,7 @@ export function registerIpc(ctx: IpcContext): void {
     writeSetting(key, value)
     const next = readSettings()
     if (key === 'launchAtLogin') applyLaunchAtLogin(next.launchAtLogin)
+    ctx.onSettingsChanged?.(key)
     return next
   })
 
@@ -332,6 +350,7 @@ export function registerIpc(ctx: IpcContext): void {
         messagesRepo.setRead(id, true)
         messagesRepo.recomputeFolderCounts(detail.folderId)
         void engine.pushSeen(detail.accountId, detail.folderPath, detail.uid, true)
+        refreshUnreadIndicators()
         detail = { ...detail, isRead: true }
       }
 
@@ -346,7 +365,9 @@ export function registerIpc(ctx: IpcContext): void {
       messagesRepo.recomputeFolderCounts(row.folder_id)
       void engine.pushSeen(row.account_id, row.folder_path, row.uid, read)
     }
-    return messagesRepo.unreadSummary()
+    const summary = messagesRepo.unreadSummary()
+    refreshUnreadIndicators()
+    return summary
   })
 
   ipcMain.handle(CH.mailSetStarred, (_event, id: number, starred: boolean): boolean => {
@@ -439,10 +460,46 @@ export function attachEngineHooks(ctx: IpcContext): void {
     if (window && !window.isDestroyed()) window.webContents.send(channel, payload)
   }
 
+  const focusWindow = (): void => {
+    const window = ctx.getWindow()
+    if (!window || window.isDestroyed()) return
+    if (window.isMinimized()) window.restore()
+    window.show()
+    window.focus()
+  }
+
   ctx.engine.setHooks({
     onProgress: (progress) => send(EV.progress, progress),
-    onNewMail: (event) => send(EV.newMail, event),
-    onSyncDone: (result) => send(EV.syncDone, result)
+
+    onNewMail: (event) => {
+      send(EV.newMail, event)
+      refreshUnreadIndicators()
+
+      // 窗口就在眼前时应用内提示已经够了，再弹系统通知属于重复打扰
+      const window = ctx.getWindow()
+      const windowFocused = Boolean(window && !window.isDestroyed() && window.isFocused())
+      if (windowFocused || !readSettings().notifyNewMail) return
+
+      const account = accountsRepo.findAccount(event.accountId)
+      notifyNewMail({
+        accountName: account?.displayName || account?.email || '邮箱',
+        event,
+        onClick: () => {
+          focusWindow()
+          if (event.latestMessageId) {
+            send(EV.openMessage, {
+              accountId: event.accountId,
+              messageId: event.latestMessageId
+            })
+          }
+        }
+      })
+    },
+
+    onSyncDone: (result) => {
+      send(EV.syncDone, result)
+      refreshUnreadIndicators()
+    }
   })
 }
 

@@ -31,5 +31,7 @@ export const CH = {
 export const EV = {
   progress: 'ev:sync-progress',
   newMail: 'ev:new-mail',
-  syncDone: 'ev:sync-done'
+  syncDone: 'ev:sync-done',
+  openMessage: 'ev:open-message',
+  composeNew: 'ev:compose-new'
 } as const

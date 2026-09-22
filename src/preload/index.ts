@@ -12,6 +12,7 @@ import type {
   MessageDetail,
   MessageMeta,
   NewMailEvent,
+  OpenMessageEvent,
   SendInput,
   SendResult,
   StorageInfo,
@@ -108,7 +109,10 @@ const api: MailMasterApi = {
   events: {
     onProgress: (cb: (payload: SyncProgress) => void): Unsubscribe => subscribe(EV.progress, cb),
     onNewMail: (cb: (payload: NewMailEvent) => void): Unsubscribe => subscribe(EV.newMail, cb),
-    onSyncDone: (cb: (payload: SyncResult) => void): Unsubscribe => subscribe(EV.syncDone, cb)
+    onSyncDone: (cb: (payload: SyncResult) => void): Unsubscribe => subscribe(EV.syncDone, cb),
+    onOpenMessage: (cb: (payload: OpenMessageEvent) => void): Unsubscribe =>
+      subscribe(EV.openMessage, cb),
+    onComposeNew: (cb: () => void): Unsubscribe => subscribe<undefined>(EV.composeNew, () => cb())
   }
 }
 

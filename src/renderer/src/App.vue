@@ -104,7 +104,20 @@ onMounted(async () => {
       ui.toast('info', `${account?.displayName ?? '账号'} 收到 ${event.count} 封新邮件`)
       await accounts.refreshUnread()
       await mail.refresh()
-    })
+    }),
+    // 系统通知被点击：切到该账号收件箱并打开那封邮件
+    window.api.events.onOpenMessage(async (payload) => {
+      const account = accounts.accountById(payload.accountId)
+      await mail.setSelection({
+        kind: 'inbox',
+        accountId: payload.accountId,
+        folderId: null,
+        label: account?.displayName || account?.email || '收件箱'
+      })
+      await mail.openMessageById(payload.messageId)
+    }),
+    // 菜单栏图标里点了「写邮件」
+    window.api.events.onComposeNew(() => ui.openCompose())
   ]
 })
 

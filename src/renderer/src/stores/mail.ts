@@ -117,6 +117,25 @@ export const useMailStore = defineStore('mail', () => {
     }
   }
 
+  /** 直接按 id 打开（系统通知点击时用，那封邮件未必在当前列表里） */
+  async function openMessageById(messageId: number): Promise<void> {
+    activeLoading.value = true
+    blockImages.value = useSettingsStore().blockRemoteImages
+    try {
+      const detail = await window.api.mail.get(messageId, blockImages.value)
+      if (!detail) return
+      active.value = detail
+      const row = items.value.find((item) => item.id === messageId)
+      if (row) {
+        row.isRead = true
+        row.hasAttachments = detail.attachments.length > 0
+      }
+      await useAccountsStore().refreshUnread()
+    } finally {
+      activeLoading.value = false
+    }
+  }
+
   async function reloadActive(): Promise<void> {
     if (!active.value) return
     activeLoading.value = true
@@ -207,6 +226,7 @@ export const useMailStore = defineStore('mail', () => {
     setSelection,
     applyFilters,
     openMessage,
+    openMessageById,
     reloadActive,
     showImages,
     toggleStar,
