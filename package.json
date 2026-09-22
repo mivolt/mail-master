@@ -1,6 +1,6 @@
 {
   "name": "mail-master",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "多账号邮件客户端",
   "main": "./out/main/index.js",
   "author": "huang",
