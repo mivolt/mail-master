@@ -1,0 +1,359 @@
+@import 'tailwindcss';
+
+:root {
+  --c-bg: #ffffff;
+  --c-sidebar: #f2f2f4;
+  --c-panel: #ffffff;
+  --c-hover: #f5f5f7;
+  --c-selected: #e6f1ff;
+  --c-ink: #1d1d1f;
+  --c-ink2: #3d3d42;
+  --c-muted: #6e6e73;
+  --c-faint: #a1a1a6;
+  --c-line: #e5e5e7;
+  --c-line-strong: #d2d2d7;
+  --c-accent: #0a84ff;
+  --c-accent-ink: #0060df;
+  --c-danger: #ff3b30;
+  --c-danger-bg: #fff1f0;
+  --c-danger-line: #ffc9c4;
+  --c-warn-bg: #fdf3e7;
+  --c-warn-line: #f0d6b0;
+  --c-warn-ink: #8a5a16;
+
+  /* 动效令牌：入场用减速曲线，出场更快，弹窗带一点回弹 */
+  --motion-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-in: cubic-bezier(0.4, 0, 1, 1);
+  --motion-spring: cubic-bezier(0.34, 1.3, 0.5, 1);
+  --dur-press: 130ms;
+  --dur-fast: 160ms;
+  --dur-base: 220ms;
+  --dur-slow: 300ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-bg: #1c1c1e;
+    --c-sidebar: #232325;
+    --c-panel: #1c1c1e;
+    --c-hover: #2c2c2e;
+    --c-selected: #0a2a4d;
+    --c-ink: #f2f2f7;
+    --c-ink2: #d1d1d6;
+    --c-muted: #98989d;
+    --c-faint: #6e6e73;
+    --c-line: #2f2f31;
+    --c-line-strong: #3a3a3c;
+    --c-accent: #0a84ff;
+    --c-accent-ink: #64d2ff;
+    --c-danger: #ff453a;
+    --c-danger-bg: #3a1d1a;
+    --c-danger-line: #5f2b24;
+    --c-warn-bg: #3a2f1c;
+    --c-warn-line: #5a4520;
+    --c-warn-ink: #f0c07a;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-sidebar: var(--c-sidebar);
+  --color-panel: var(--c-panel);
+  --color-hover: var(--c-hover);
+  --color-selected: var(--c-selected);
+  --color-ink: var(--c-ink);
+  --color-ink2: var(--c-ink2);
+  --color-muted: var(--c-muted);
+  --color-faint: var(--c-faint);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-accent: var(--c-accent);
+  --color-accent-ink: var(--c-accent-ink);
+  --color-danger: var(--c-danger);
+  --color-danger-bg: var(--c-danger-bg);
+  --color-danger-line: var(--c-danger-line);
+  --color-warn-bg: var(--c-warn-bg);
+  --color-warn-line: var(--c-warn-line);
+  --color-warn-ink: var(--c-warn-ink);
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-ink);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--c-faint) 45%, transparent);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--c-faint) 75%, transparent);
+  background-clip: content-box;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: default;
+}
+
+/* 统一按钮过渡（含 transform，按下缩放才能平滑）。行级按钮用 .no-press 排除。 */
+button:not(:disabled) {
+  transition:
+    transform var(--dur-press) var(--motion-out),
+    background-color var(--dur-press) var(--motion-out),
+    border-color var(--dur-press) var(--motion-out),
+    color var(--dur-press) var(--motion-out),
+    opacity var(--dur-press) var(--motion-out);
+}
+
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+button.no-press:not(:disabled):active {
+  transform: none;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+/* ---------- 内容切换：淡入 + 轻微上浮 ---------- */
+
+@keyframes content-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.content-in {
+  animation: content-in var(--dur-base) var(--motion-out) both;
+}
+
+/* 阻断性错误：比警告更醒目，因为用户此刻无法继续 */
+.alert-error {
+  display: flex;
+  gap: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--c-danger-line);
+  background: var(--c-danger-bg);
+  padding: 10px 12px;
+}
+
+.alert-error__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-danger);
+}
+
+.alert-error__body {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--c-ink2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 隐性提示：默认只是一行浅色文字，点开才展开内容 */
+.hint-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 5px 6px;
+  text-align: left;
+  font-size: 11.5px;
+  color: var(--c-muted);
+}
+
+.hint-trigger:hover {
+  background: var(--c-hover);
+  color: var(--c-ink);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fade-in var(--dur-fast) var(--motion-out) both;
+}
+
+/* ---------- 弹窗：遮罩淡入，面板放大上浮 ---------- */
+
+.dialog-enter-active {
+  transition: opacity var(--dur-base) var(--motion-out);
+}
+
+.dialog-leave-active {
+  transition: opacity var(--dur-fast) var(--motion-in);
+}
+
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+}
+
+.dialog-enter-active .dialog-panel {
+  transition:
+    transform var(--dur-slow) var(--motion-spring),
+    opacity var(--dur-base) var(--motion-out);
+}
+
+.dialog-enter-from .dialog-panel {
+  transform: scale(0.965) translateY(12px);
+  opacity: 0;
+}
+
+.dialog-leave-active .dialog-panel {
+  transition:
+    transform var(--dur-fast) var(--motion-in),
+    opacity var(--dur-fast) var(--motion-in);
+}
+
+.dialog-leave-to .dialog-panel {
+  transform: scale(0.985);
+  opacity: 0;
+}
+
+/* ---------- 提示条：从右下角滑入 ---------- */
+
+.toast-enter-active {
+  transition:
+    opacity var(--dur-base) var(--motion-out),
+    transform var(--dur-slow) var(--motion-spring);
+}
+
+.toast-leave-active {
+  transition:
+    opacity var(--dur-fast) var(--motion-in),
+    transform var(--dur-fast) var(--motion-in);
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(18px) scale(0.96);
+}
+
+.toast-move {
+  transition: transform var(--dur-base) var(--motion-out);
+}
+
+/* ---------- 条件区块：淡入 + 轻微下落 ---------- */
+
+.reveal-enter-active {
+  transition:
+    opacity var(--dur-fast) var(--motion-out),
+    transform var(--dur-base) var(--motion-out);
+}
+
+.reveal-leave-active {
+  transition:
+    opacity var(--dur-press) var(--motion-in),
+    transform var(--dur-press) var(--motion-in);
+}
+
+.reveal-enter-from,
+.reveal-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ---------- 侧栏文件夹展开：0fr → 1fr 高度过渡 ---------- */
+
+.folder-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--dur-base) var(--motion-out),
+    opacity var(--dur-fast) var(--motion-out);
+}
+
+.folder-expand[data-open='true'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.folder-expand > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---------- 无障碍：尊重系统的「减弱动态效果」 ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
