@@ -159,6 +159,12 @@ npm run build          # 构建到 out/
 npm run typecheck      # 主进程 tsc + 渲染层 vue-tsc
 ```
 
+> 国内网络安装依赖时，Electron 的二进制下载可能超时，设置镜像即可：
+> ```bash
+> ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install
+> ```
+> `package-lock.json` 固定指向公网 npm 源，以保证 CI 和任何克隆者都能安装。
+
 ### 架构
 
 ```

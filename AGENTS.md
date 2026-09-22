@@ -110,6 +110,10 @@ npx electron-builder --mac -c.mac.identity=null
 - **测试骨架要能在中断时输出已收集的结果**：结果原本只在末尾统一打印，
   一旦中途抛异常就什么都看不到，定位不到失败位置。已加 `uncaughtException`
   处理，中断时也会打印已跑过的检查项。
+- **`package-lock.json` 必须指向公网源**：本机 `~/.npmrc` 指向公司私有 nexus，
+  npm 会把下载地址写进 lockfile。GitHub Actions 的机器访问不到 nexus，
+  `npm ci` 会直接失败。**改动依赖后记得检查** lockfile 里的 `resolved` 是否
+  又变回 nexus，是的话替换前缀为 `https://registry.npmjs.org/`。
 - **环境**：用户 `~/.npmrc` 是私有 nexus 源，会剥掉 electron 包的 `scripts` 字段
   导致二进制不下载，需手动跑 `node node_modules/electron/install.js` 并设 `ELECTRON_MIRROR`
 - **生图服务**会在图片右下角叠加品牌水印，`image_edit` 去不掉（属服务端后处理），
