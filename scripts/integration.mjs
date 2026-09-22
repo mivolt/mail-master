@@ -746,10 +746,11 @@ async function openRow(subject) {
 await openRow('第三封：中文主题与 HTML 正文')
 const readerTextHtml = await waitForReaderSubject('第三封：中文主题与 HTML 正文')
 check('阅读区显示正确的邮件主题', readerTextHtml.includes('第三封：中文主题与 HTML 正文'), readerTextHtml.replace(/\s+/g, ' ').slice(0, 90))
-await page.screenshot({ path: join(shotDir, '03-reader-html.png') })
 
 const frameText = await waitForFrameText((text) => text.includes('HTML 正文标题'))
 check('邮件正文在 iframe 中渲染', frameText.includes('HTML 正文标题'), frameText.replace(/\s+/g, ' ').slice(0, 90))
+// 截图放在正文渲染完成之后，否则会拍到空白阅读区
+await page.screenshot({ path: join(shotDir, '03-reader-html.png') })
 check('正文中的 script 未执行（无 alert 报错）', pageErrors.length === 0, pageErrors.join(' | '))
 
 const blocked = await page.evaluate(() => document.body.innerText.includes('显示图片'))
