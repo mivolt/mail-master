@@ -185,7 +185,7 @@ const EMAIL_DOC_STYLE = `
   :root { color-scheme: light dark; }
   html, body { margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
     font-size: 14px;
     line-height: 1.62;
     color: #1d1d1f;

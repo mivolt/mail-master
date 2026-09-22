@@ -7,3 +7,5 @@ build/icon.iconset/
 *.log
 .DS_Store
 .vite/
+resources/tray-icons-preview.png
+resources/trayTemplate-preview.png

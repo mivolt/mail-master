@@ -66,6 +66,13 @@ def main() -> None:
     master.save(MASTER)
     print(f"已写出 {MASTER}")
 
+    # Windows 需要 .ico：单文件内含多档尺寸，任务栏/资源管理器/alt-tab 各取所需
+    ico_path = os.path.join(ROOT, "build", "icon.ico")
+    master.resize((256, 256), Image.LANCZOS).save(
+        ico_path, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+    )
+    print(f"已写出 {ico_path}（{os.path.getsize(ico_path) // 1024} KB）")
+
     # 5) 生成 .iconset 并调用 iconutil 打包 icns
     if os.path.isdir(ICONSET):
         shutil.rmtree(ICONSET)

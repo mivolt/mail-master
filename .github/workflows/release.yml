@@ -1,7 +1,7 @@
 name: 发布
 
 # 两种触发方式：
-#   1. 推送 v* tag —— 以后的常规发布流程，全自动
+#   1. 推送 v* tag —— 常规发布流程，全自动
 #   2. 手动触发 —— 用于补发已存在的 tag（GitHub 不会为已推送的 tag 重跑 workflow）
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '要发布的版本号，需与 package.json 一致（如 0.1.2）'
+        description: '要发布的版本号，需与 package.json 一致（如 0.2.0）'
         required: true
         type: string
 
@@ -19,20 +19,13 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    # macos-14 起是 Apple Silicon runner，产物为 arm64
-    runs-on: macos-14
-
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: 安装依赖
-        run: npm ci
 
       - name: 解析版本号与 tag
         id: meta
@@ -45,15 +38,48 @@ jobs:
             VERSION="${TAG#v}"
           fi
 
-          PKG_VERSION="$(node -p "require('./package.json').version")"
-          if [ "$VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::版本号不一致：tag 为 $VERSION，package.json 为 $PKG_VERSION"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$PKG" ]; then
+            echo "::error::版本号不一致：tag 为 $VERSION，package.json 为 $PKG"
             exit 1
           fi
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "将发布 $TAG（package.json 版本 $PKG_VERSION）"
+          echo "将发布 $TAG（package.json 版本 $PKG）"
+
+  build:
+    needs: resolve
+    # 一个平台失败不影响另一个平台继续构建，便于分别定位
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            artifact: macos-arm64
+            build_args: '--mac --arm64 -c.mac.identity=null'
+          - os: windows-latest
+            artifact: windows-x64
+            build_args: '--win --x64'
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 环境信息
+        run: |
+          node -v
+          npm -v
+          npx electron-builder --version
+        shell: bash
 
       - name: 类型检查
         run: npm run typecheck
@@ -61,10 +87,15 @@ jobs:
       - name: 核心测试
         run: npm run test:core
 
-      - name: 打包 arm64 安装镜像
-        run: npm run dist:mac
+      # 构建与打包拆成两步：失败时能靠耗时判断是哪一半出问题
+      - name: 构建主进程与渲染层
+        run: npm run build
 
-      - name: 校验产物架构
+      - name: 打包安装包
+        run: npx electron-builder ${{ matrix.build_args }}
+
+      - name: 校验产物确实是纯 arm64（仅 macOS）
+        if: matrix.os == 'macos-14'
         run: |
           APP="release/mac-arm64/Mail Master.app"
           ARCH="$(lipo -archs "$APP/Contents/MacOS/Mail Master")"
@@ -73,28 +104,49 @@ jobs:
             echo "::error::产物不是纯 arm64，会触发 macOS 的 Intel 弃用警告"
             exit 1
           fi
+        shell: bash
 
-      - name: 发布 Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ steps.meta.outputs.tag }}"
-          VERSION="${{ steps.meta.outputs.version }}"
-
-          # 已存在则只补传附件，避免重复发布时报错
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG 已存在，补传附件"
-            gh release upload "$TAG" release/*.dmg --clobber
-          else
-            gh release create "$TAG" release/*.dmg \
-              --title "Mail Master $VERSION" \
-              --generate-notes
-          fi
+      - name: 列出产物
+        run: ls -lh release/ || true
+        shell: bash
 
       - name: 保留构建产物
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dmg-${{ steps.meta.outputs.version }}
-          path: release/*.dmg
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.blockmap
           retention-days: 7
+
+  publish:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 创建或更新 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${{ needs.resolve.outputs.tag }}"
+          VERSION="${{ needs.resolve.outputs.version }}"
+
+          echo "待上传的附件："
+          ls -lh dist || true
+
+          # 已存在则只补传附件，避免重复发布时报错
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在，补传附件"
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "Mail Master $VERSION" \
+              --generate-notes
+          fi

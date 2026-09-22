@@ -10,9 +10,6 @@ files:
   - out/**/*
   - package.json
 
-asarUnpack:
-  - resources/**
-
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns
@@ -41,5 +38,20 @@ dmg:
       y: 190
       type: link
       path: /Applications
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+
+nsis:
+  # 不做一键安装：让用户能选安装目录，这是 Windows 桌面软件的常规预期
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Mail Master
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
 
 npmRebuild: false

@@ -62,6 +62,8 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): Unsubscr
 
 const api: MailMasterApi = {
   app: {
+    // 沙箱化 preload 里 process.platform 可用；同步暴露，界面无需 await
+    platform: process.platform,
     info: (): Promise<AppInfo> => invoke(CH.appInfo),
     openExternal: (url: string): Promise<void> => invoke(CH.appOpenExternal, url),
     storageInfo: (): Promise<StorageInfo> => invoke(CH.appStorageInfo),

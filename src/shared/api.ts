@@ -28,6 +28,8 @@ export type Unsubscribe = () => void
 
 export interface MailMasterApi {
   app: {
+    /** 同步可读的平台标识，界面用它决定标题栏布局（无需 await） */
+    platform: string
     info(): Promise<AppInfo>
     openExternal(url: string): Promise<void>
     storageInfo(): Promise<StorageInfo>

@@ -1,6 +1,7 @@
 import { Menu, Tray, nativeImage } from 'electron'
 // 图标很小（<1KB），Vite 会内联成 data URL，因此不必处理开发/打包的路径差异
-import trayIcon2x from '../../resources/trayTemplate@2x.png'
+import trayTemplateIcon from '../../resources/trayTemplate@2x.png'
+import trayWindowsIcon from '../../resources/trayWindows@2x.png'
 
 export interface TrayHandlers {
   onOpen: () => void
@@ -14,11 +15,14 @@ let unread = 0
 let handlers: TrayHandlers | null = null
 
 function loadIcon(): Electron.NativeImage {
-  const image = trayIcon2x.startsWith('data:')
-    ? nativeImage.createFromDataURL(trayIcon2x)
-    : nativeImage.createFromPath(trayIcon2x)
-  // 模板图：系统拿 alpha 当遮罩，自动适配浅色 / 深色菜单栏
-  image.setTemplateImage(true)
+  const isMac = process.platform === 'darwin'
+  const source = isMac ? trayTemplateIcon : trayWindowsIcon
+  const image = source.startsWith('data:')
+    ? nativeImage.createFromDataURL(source)
+    : nativeImage.createFromPath(source)
+  // 模板图是 macOS 专有能力（系统拿 alpha 当遮罩自动适配深浅色）。
+  // Windows 不支持模板图，必须用彩色图标，否则深色任务栏上看不见。
+  if (isMac) image.setTemplateImage(true)
   return image
 }
 
@@ -36,7 +40,10 @@ function buildMenu(): Electron.Menu {
 
 function refresh(): void {
   if (!tray) return
-  tray.setTitle(unread > 0 ? ` ${unread > 99 ? '99+' : unread}` : '')
+  // setTitle（图标旁显示文字）是 macOS 专有，Windows 上无效
+  if (process.platform === 'darwin') {
+    tray.setTitle(unread > 0 ? ` ${unread > 99 ? '99+' : unread}` : '')
+  }
   tray.setToolTip(unread > 0 ? `Mail Master · ${unread} 封未读` : 'Mail Master')
   tray.setContextMenu(buildMenu())
 }

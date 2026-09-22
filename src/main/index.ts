@@ -44,14 +44,20 @@ function applyTraySetting(): void {
 }
 
 function createWindow(): void {
+  const isMac = process.platform === 'darwin'
+
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 860,
     minWidth: 960,
     minHeight: 620,
     show: false,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 18 },
+    // macOS 隐藏系统标题栏，用窗口内的自定义标题栏（红绿灯浮在左侧）。
+    // Windows 保留系统标题栏：最小化/最大化/关闭由系统提供，行为最可预期，
+    // 也免去自己实现窗口控制按钮的坑。
+    ...(isMac
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 18 } }
+      : {}),
     backgroundColor: '#f5f5f7',
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
@@ -112,7 +118,7 @@ function bootstrap(): void {
       onSettingsChanged: (key: string): void => {
         if (key !== 'showTrayIcon') return
         applyTraySetting()
-        refreshUnreadIndicators()
+        refreshUnreadIndicators(mainWindow)
       }
     }
     registerIpc(ctx)
@@ -125,7 +131,7 @@ function bootstrap(): void {
     })
 
     applyTraySetting()
-    refreshUnreadIndicators()
+    refreshUnreadIndicators(mainWindow)
     engine.startAll()
   })
 }

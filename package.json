@@ -22,7 +22,9 @@
     "verify:package-ui": "node scripts/verify-packaged-ui.mjs",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64 -c.mac.identity=null",
     "dist:mac:x64": "electron-vite build && electron-builder --mac --x64 -c.mac.identity=null",
-    "dist:mac:all": "electron-vite build && electron-builder --mac --arm64 --x64 -c.mac.identity=null"
+    "dist:mac:all": "electron-vite build && electron-builder --mac --arm64 --x64 -c.mac.identity=null",
+    "dist:win": "electron-vite build && electron-builder --win --x64",
+    "dist:win:arm64": "electron-vite build && electron-builder --win --arm64"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",

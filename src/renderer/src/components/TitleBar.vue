@@ -7,6 +7,10 @@ import { useUiStore } from '../stores/ui'
 const mail = useMailStore()
 const ui = useUiStore()
 
+// macOS 隐藏了系统标题栏，红绿灯浮在左侧，需要留出内边距并自己提供拖拽区。
+// Windows 保留系统标题栏，这行就是一个普通工具条。
+const isMac = window.api.app.platform === 'darwin'
+
 const statusText = computed(() => {
   if (mail.syncing) return mail.progress?.message ?? '正在同步…'
   if (mail.progress?.phase === 'error') return mail.progress.message
@@ -16,7 +20,8 @@ const statusText = computed(() => {
 
 <template>
   <header
-    class="drag-region flex h-11 shrink-0 items-center gap-3 border-b border-line bg-bg pr-3 pl-[86px]"
+    class="flex h-11 shrink-0 items-center gap-3 border-b border-line bg-bg pr-3"
+    :class="isMac ? 'drag-region pl-[86px]' : 'pl-3'"
   >
     <div class="flex min-w-0 flex-1 items-center gap-2">
       <Icon name="mail" :size="14" class="text-faint" />
@@ -24,7 +29,7 @@ const statusText = computed(() => {
       <span v-if="statusText" class="truncate text-[12px] text-faint">· {{ statusText }}</span>
     </div>
 
-    <div class="no-drag flex items-center gap-1">
+    <div class="flex items-center gap-1" :class="isMac ? 'no-drag' : ''">
       <button
         type="button"
         class="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-ink disabled:opacity-40"

@@ -35,6 +35,7 @@ import { decryptSecret, encryptSecret } from '../security/vault'
 import { clearAllData, storageInfo } from '../storage'
 import { notifyNewMail } from '../notifications'
 import { updateTrayUnread } from '../tray'
+import { applyBadge } from '../badge'
 
 function pickColor(): string {
   const existing = accountsRepo.listAccounts().length
@@ -133,16 +134,14 @@ export interface IpcContext {
   onSettingsChanged?: (key: string) => void
 }
 
-/** 未读数变化后同步 Dock 角标与菜单栏标题 */
-export function refreshUnreadIndicators(): void {
+/** 未读数变化后同步 Dock 角标（macOS）/ 任务栏叠加图标（Windows）与菜单栏标题 */
+export function refreshUnreadIndicators(window: BrowserWindow | null): void {
   try {
     const total = messagesRepo.unreadSummary().total
-    if (process.platform === 'darwin') {
-      app.dock?.setBadge(total > 0 ? String(total) : '')
-    }
+    applyBadge(window, total)
     updateTrayUnread(total)
   } catch {
-    // Dock 角标与菜单栏属于系统集成，出问题不应影响应用本身
+    // 角标与菜单栏属于系统集成，出问题不应影响应用本身
   }
 }
 
@@ -350,7 +349,7 @@ export function registerIpc(ctx: IpcContext): void {
         messagesRepo.setRead(id, true)
         messagesRepo.recomputeFolderCounts(detail.folderId)
         void engine.pushSeen(detail.accountId, detail.folderPath, detail.uid, true)
-        refreshUnreadIndicators()
+        refreshUnreadIndicators(ctx.getWindow())
         detail = { ...detail, isRead: true }
       }
 
@@ -366,7 +365,7 @@ export function registerIpc(ctx: IpcContext): void {
       void engine.pushSeen(row.account_id, row.folder_path, row.uid, read)
     }
     const summary = messagesRepo.unreadSummary()
-    refreshUnreadIndicators()
+    refreshUnreadIndicators(ctx.getWindow())
     return summary
   })
 
@@ -473,7 +472,7 @@ export function attachEngineHooks(ctx: IpcContext): void {
 
     onNewMail: (event) => {
       send(EV.newMail, event)
-      refreshUnreadIndicators()
+      refreshUnreadIndicators(ctx.getWindow())
 
       // 窗口就在眼前时应用内提示已经够了，再弹系统通知属于重复打扰
       const window = ctx.getWindow()
@@ -498,7 +497,7 @@ export function attachEngineHooks(ctx: IpcContext): void {
 
     onSyncDone: (result) => {
       send(EV.syncDone, result)
-      refreshUnreadIndicators()
+      refreshUnreadIndicators(ctx.getWindow())
     }
   })
 }

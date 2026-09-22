@@ -114,6 +114,13 @@ npx electron-builder --mac -c.mac.identity=null
   npm 会把下载地址写进 lockfile。GitHub Actions 的机器访问不到 nexus，
   `npm ci` 会直接失败。**改动依赖后记得检查** lockfile 里的 `resolved` 是否
   又变回 nexus，是的话替换前缀为 `https://registry.npmjs.org/`。
+- **跨平台图标有两套**：macOS 菜单栏用模板图（纯黑 + alpha，系统当遮罩用，
+  自动适配深浅色）；**Windows 不支持模板图**，必须用彩色实心图标，否则深色
+  任务栏上看不见。见 `resources/trayTemplate*` 与 `resources/trayWindows*`。
+- **Windows 没有 Dock 角标**，要用 `win.setOverlayIcon()`；而它只能给图片，
+  主进程又没有 canvas，所以数字是预先生成在 `resources/badges/` 下的。
+- **Windows 目标可在 macOS 上交叉构建**，产出 NSIS 安装包不需要 wine
+  （已实测）。但**无法在本机验证它真能运行**，需要 Windows 机器实测。
 - **环境**：用户 `~/.npmrc` 是私有 nexus 源，会剥掉 electron 包的 `scripts` 字段
   导致二进制不下载，需手动跑 `node node_modules/electron/install.js` 并设 `ELECTRON_MIRROR`
 - **生图服务**会在图片右下角叠加品牌水印，`image_edit` 去不掉（属服务端后处理），

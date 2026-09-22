@@ -116,18 +116,28 @@ macOS 多账号邮件客户端，基于 IMAP / SMTP 通用协议。把多个邮�
 
 ## 安装
 
+### macOS
+
 从 [Releases](https://github.com/mivolt/mail-master/releases) 下载最新的 `Mail Master-x.y.z-arm64.dmg`：
 
 1. 双击挂载，把 Mail Master 拖进 Applications
 2. 首次打开若被 Gatekeeper 拦截：右键图标选「打开」，或执行
    `xattr -dr com.apple.quarantine "/Applications/Mail Master.app"`
 
-**系统要求**：macOS 11 或更高，Apple Silicon（arm64）。
+要求 macOS 11 或更高、Apple Silicon（arm64）。
 
 > **在 Apple 芯片上不要装 x64 版本。** macOS 26 起，运行基于 Intel 的 App 会弹出「对基于 Intel 的 App 的支持即将结束」的警告——因为 Intel 版本要通过 Rosetta 转译。确认自己装的是哪个架构：
 > ```bash
 > lipo -archs "/Applications/Mail Master.app/Contents/MacOS/Mail Master"   # 期望输出 arm64
 > ```
+
+### Windows
+
+从 Releases 下载最新的 `Mail Master-x.y.z-x64-setup.exe`，双击安装。安装向导可以选安装目录，并会创建桌面与开始菜单快捷方式。
+
+要求 Windows 10 或更高（x64）。
+
+> **产物未签名**，首次运行 Windows SmartScreen 会提示「已保护你的电脑」。点「更多信息」→「仍要运行」即可。
 
 ## 支持的邮箱
 
@@ -179,10 +189,11 @@ src/
 │   │   ├── parser.ts         MIME 解析 + HTML 净化 + 渲染文档生成
 │   │   ├── diagnostics.ts    协议级脱敏的连接诊断报告
 │   │   └── errors.ts         把 imapflow 的通用报错还原成可行动的信息
-│   ├── tray.ts               菜单栏图标（模板图，自动适配深浅色）
+│   ├── tray.ts               菜单栏 / 任务栏图标（macOS 用模板图，Windows 用彩色图）
+│   ├── badge.ts              未读角标：macOS Dock 角标 / Windows 任务栏叠加图标
 │   ├── notifications.ts      新邮件系统通知
 │   ├── db/                   node:sqlite（Electron 内置，无需原生编译）
-│   └── security/vault.ts     safeStorage（Keychain）加解密凭据
+│   └── security/vault.ts     safeStorage 加解密凭据（macOS 钥匙串 / Windows DPAPI）
 ├── preload/index.ts          contextBridge 窄接口，输出 CJS 以兼容 sandbox
 ├── shared/                   主/渲染共享类型、通道名、服务商预设、设置定义
 └── renderer/src/             Vue 3 三栏界面
@@ -196,7 +207,7 @@ src/
 | IPC | 仅通过 preload 暴露的固定方法，无任意通道调用；错误信息剥离 Electron 包装前缀 |
 | 邮件正文 | `sandbox="allow-popups"` iframe + 主进程净化（剥离 script / 事件属性 / `javascript:`） |
 | 远程图片 | 默认改写为占位图，原地址存 `data-blocked-src`，用户显式点击才加载 |
-| 凭据 | Keychain 加密后存 SQLite；解密失败时提示重新输入而非静默失败 |
+| 凭据 | 经系统钥匙串（macOS）/ DPAPI（Windows）加密后存 SQLite；解密失败时提示重新输入而非静默失败 |
 | 诊断报告 | 按协议语义脱敏——SASL-IR 下凭据是 base64 内联的，按字面匹配密码抓不到 |
 | 外链 | 一律 `shell.openExternal` 交给系统浏览器，窗口内禁止导航 |
 | 权限 | `setPermissionRequestHandler` 拒绝全部（摄像头 / 定位等一概不用） |
@@ -292,9 +303,10 @@ git push --follow-tags
 ### 本地打包
 
 ```bash
-npm run dist:mac        # 默认只出 arm64（跟随构建机架构）
+npm run dist:mac        # macOS arm64（默认只出这个）
 npm run dist:mac:x64    # 需要 Intel 版时显式构建
-npm run dist:mac:all    # 两个架构都出
+npm run dist:win        # Windows x64，产出 NSIS 安装包
+npm run dist:win:arm64  # Windows on ARM
 ```
 
 国内网络需要加镜像变量，否则 electron-builder 会在下载二进制时超时：
@@ -306,6 +318,8 @@ npm run dist:mac
 ```
 
 只有确实要支持 Intel Mac 时才用 `dist:mac:x64`；两个架构都出会让使用者容易装错。
+
+Windows 目标可以在 macOS 上交叉构建（本机已验证能产出 NSIS 安装包，无需 wine）。
 
 ### 签名与公证
 
@@ -319,7 +333,8 @@ npm run dist:mac
 - **搜索是本地 `LIKE` 匹配**，范围限于已同步的邮件，不是服务端全文检索。
 - **草稿箱只读。** 写信过程中关闭窗口内容会丢失，尚未接入 IMAP APPEND 保存草稿。
 - **未实现 OAuth2**，因此 Gmail 需应用专用密码，且账号安全策略更严格的企业邮箱可能拒绝基础认证。
-- **仅适配 macOS**（使用 `hiddenInset` 标题栏、Keychain、`.app` 打包），未做 Windows / Linux 适配。
+- **平台支持**：macOS（已在真实邮箱上实测）与 Windows（已能构建并打包，但**尚未在 Windows 机器上实测过运行**——需要有人帮忙验证）。Linux 未适配。
+- **移动端不做**：Electron 不支持 iOS / Android。而且 iOS 不允许后台长期保持 IMAP 连接，要做到实时推送必须引入服务器，那会违背「邮件不经过第三方」的承诺。详见下方说明。
 
 ## 技术选型说明
 

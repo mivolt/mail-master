@@ -781,7 +781,22 @@ async function waitForFrameText(predicate, timeoutMs = 10000) {
   return text
 }
 
+/**
+ * 点开邮件。
+ *
+ * 弹窗的遮罩是 fixed inset-0，会拦住列表上的点击，症状是「元素可见可点但点击超时」。
+ * 这里先探测有无残留弹窗，把它变成可诊断的失败而不是硬中断。
+ */
 async function openRow(subject) {
+  const stray = await page.evaluate(() => {
+    const panel = document.querySelector('.dialog-panel')
+    return panel ? panel.innerText.replace(/\s+/g, ' ').slice(0, 90) : null
+  })
+  if (stray) {
+    check('打开邮件前不应有残留弹窗', false, `实际弹窗：${stray}`)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(500)
+  }
   await page.locator('button', { hasText: subject }).first().click()
 }
 
@@ -820,13 +835,23 @@ check('列表中只剩 1 个未读标识', unreadDots === 1, `${unreadDots} 个`
 // 5. 显示图片
 const errorsBeforeImages = consoleErrors.length
 await page.locator('button', { hasText: '显示图片' }).first().click()
-await page.waitForTimeout(1500)
+// 远程图片故意指向不可解析的域名，失败报错类型随网络环境变化
+// （ERR_NAME_NOT_RESOLVED / ERR_CONNECTION_CLOSED 等），所以只判断
+// 「出现了新的资源加载失败、且不是 CSP 拦截」——那才说明请求真的发出去了
+let imageErrors = []
+for (let attempt = 0; attempt < 20; attempt += 1) {
+  await page.waitForTimeout(400)
+  imageErrors = consoleErrors.slice(errorsBeforeImages)
+  if (imageErrors.some((text) => /Failed to load resource/.test(text))) break
+}
 const shown = await page.evaluate(() => document.body.innerText.includes('显示图片'))
 check('点击后拦截提示消失', shown === false, '')
-const imageRequestMade = consoleErrors
-  .slice(errorsBeforeImages)
-  .some((text) => text.includes('tracker.example.com') || text.includes('ERR_NAME_NOT_RESOLVED'))
-check('点击后确实发起了远程图片请求（CSP 未拦截）', imageRequestMade, consoleErrors.slice(errorsBeforeImages).join(' | '))
+check(
+  '点击后确实发起了远程图片请求（未被 CSP 拦截）',
+  imageErrors.some((text) => /Failed to load resource/.test(text)) &&
+    !imageErrors.some((text) => /Content Security Policy/i.test(text)),
+  imageErrors.join(' | ').slice(0, 160)
+)
 await page.screenshot({ path: join(shotDir, '04-images-shown.png') })
 
 // 6. 打开带附件的邮件
@@ -901,8 +926,10 @@ check(
   `${localValue}@${domainValue}`
 )
 
+// 测试环境里唯一的外部请求是指向不可解析域名的追踪像素，它的加载失败属预期。
+// 注意不要连 CSP 拦截一起滤掉——那正是要抓的回归。
 const unexpectedErrors = consoleErrors.filter(
-  (text) => !text.includes('tracker.example.com') && !text.includes('ERR_NAME_NOT_RESOLVED')
+  (text) => !/Failed to load resource: net::ERR_/.test(text)
 )
 check('渲染层无非预期控制台错误', unexpectedErrors.length === 0, unexpectedErrors.join(' | '))
 check('渲染层无未捕获异常', pageErrors.length === 0, pageErrors.join(' | '))

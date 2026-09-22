@@ -76,8 +76,8 @@
   --color-warn-line: var(--c-warn-line);
   --color-warn-ink: var(--c-warn-ink);
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', Arial,
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
