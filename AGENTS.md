@@ -121,6 +121,12 @@ npx electron-builder --mac -c.mac.identity=null
   主进程又没有 canvas，所以数字是预先生成在 `resources/badges/` 下的。
 - **Windows 目标可在 macOS 上交叉构建**，产出 NSIS 安装包不需要 wine
   （已实测）。但**无法在本机验证它真能运行**，需要 Windows 机器实测。
+- **electron-builder 在 CI 里会「隐式发布」**：检测到 git tag 就自己去建 Release，
+  而它需要 `GH_TOKEN`，未设置会直接失败——症状很迷惑，因为**产物其实已经构建成功了**，
+  报错发生在构建之后。打包命令必须加 `--publish never`。
+- **产物文件名不要带空格**：GitHub Actions 的 artifact 中转会把空格替换成点，
+  发布出来的名字与本地不一致（`Mail Master-x.dmg` → `Mail.Master-x.dmg`）。
+  已在 `electron-builder.yml` 里显式指定带连字符的 `artifactName`。
 - **环境**：用户 `~/.npmrc` 是私有 nexus 源，会剥掉 electron 包的 `scripts` 字段
   导致二进制不下载，需手动跑 `node node_modules/electron/install.js` 并设 `ELECTRON_MIRROR`
 - **生图服务**会在图片右下角叠加品牌水印，`image_edit` 去不掉（属服务端后处理），

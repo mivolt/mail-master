@@ -118,7 +118,7 @@ macOS 多账号邮件客户端，基于 IMAP / SMTP 通用协议。把多个邮�
 
 ### macOS
 
-从 [Releases](https://github.com/mivolt/mail-master/releases) 下载最新的 `Mail Master-x.y.z-arm64.dmg`：
+从 [Releases](https://github.com/mivolt/mail-master/releases) 下载最新的 `Mail-Master-x.y.z-arm64.dmg`：
 
 1. 双击挂载，把 Mail Master 拖进 Applications
 2. 首次打开若被 Gatekeeper 拦截：右键图标选「打开」，或执行
@@ -133,7 +133,7 @@ macOS 多账号邮件客户端，基于 IMAP / SMTP 通用协议。把多个邮�
 
 ### Windows
 
-从 Releases 下载最新的 `Mail Master-x.y.z-x64-setup.exe`，双击安装。安装向导可以选安装目录，并会创建桌面与开始菜单快捷方式。
+从 Releases 下载最新的 `Mail-Master-x.y.z-x64-setup.exe`，双击安装。安装向导可以选安装目录，并会创建桌面与开始菜单快捷方式。
 
 要求 Windows 10 或更高（x64）。
 

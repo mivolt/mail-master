@@ -28,7 +28,9 @@ mac:
     LSMinimumSystemVersion: '11.0'
 
 dmg:
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  # 产物名不用空格：GitHub Actions 的 artifact 中转会把空格替换成点，
+  # 导致发布出来的文件名与本地不一致
+  artifactName: Mail-Master-${version}-${arch}.${ext}
   iconSize: 128
   contents:
     - x: 150
@@ -52,6 +54,6 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Mail Master
-  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+  artifactName: Mail-Master-${version}-${arch}-setup.${ext}
 
 npmRebuild: false
