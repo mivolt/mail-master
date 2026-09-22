@@ -257,6 +257,25 @@ MM_TEST_EMAIL=... MM_TEST_SECRET=... \
 
 ## 打包
 
+### 自动发布（推荐）
+
+推送 tag 即自动构建并发布，不需要本地构建环境，也不需要手动上传附件：
+
+```bash
+npm version patch        # 或 minor / major，会同时改 package.json 并打 tag
+git push --follow-tags
+```
+
+`.github/workflows/release.yml` 会在 macOS runner 上安装依赖、跑类型检查与核心测试、打包 arm64 镜像、**校验产物确实是纯 arm64**（防止误发 Intel 版），然后创建 Release 并上传 DMG。发布说明由 GitHub 按提交记录自动生成，发布后可以手动编辑。
+
+权限来自 GitHub 自动注入的 `GITHUB_TOKEN`，**不需要配置任何 secrets**。公开仓库的 Actions 分钟数免费无限。
+
+补发已存在的 tag（GitHub 不会为已推送的 tag 重跑 workflow）：在 Actions 页面选「发布」→ **Run workflow** → 填入版本号。
+
+> 为什么上传附件需要 API 权限？`git push` 走 git 传输协议用 SSH 密钥，而 Release 附件走 REST API 用 token——SSH 密钥在设计上只能授权 git 传输，不能调用 API。这也是 DMG 不能走 git 推送的原因之一：它 124 MB，超过 GitHub 单文件 100 MB 的硬限制。
+
+### 本地打包
+
 ```bash
 npm run dist:mac        # 默认只出 arm64（跟随构建机架构）
 npm run dist:mac:x64    # 需要 Intel 版时显式构建
