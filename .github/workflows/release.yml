@@ -146,12 +146,21 @@ jobs:
           TAG="${{ needs.resolve.outputs.tag }}"
           VERSION="${{ needs.resolve.outputs.version }}"
 
+          # 清掉旧附件：改名重发时（比如产物命名修正）旧文件会残留，
+          # 新旧混在一起会让人困惑该下哪个
+          echo "清理旧附件："
+          gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '.assets[] | "  删除 \(.name)"' |
+            while IFS= read -r line; do
+              echo "$line"
+              ID=$(echo "$line" | grep -o '[0-9]*$')
+              [ -n "$ID" ] && gh api -X DELETE "repos/$GH_REPO/releases/assets/$ID" || true
+            done || true
+
           echo "待上传的附件："
           ls -lh dist || true
 
-          # 已存在则只补传附件，避免重复发布时报错
+          # 已存在则重建附件，否则新建 Release
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG 已存在，补传附件"
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* \
