@@ -13,12 +13,15 @@ files:
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns
-  # 不在此处固定 arch：默认跟随构建机（Apple 芯片 → arm64）。
+  # dmg 同时产出 arm64 与 x64：arm64 跟随构建机，x64 交叉构建。
   # 在 Apple 芯片上运行 x64 版本会走 Rosetta，macOS 26 起会弹出
   # 「基于 Intel 的 App 支持即将结束」的警告，并提示 macOS 28 将无法运行。
-  # 需要 Intel 版时用 npm run dist:mac:x64 显式构建。
+  # 只出单架构时用 npm run dist:mac / dist:mac:x64（CLI 的 arch 参数会覆盖这里的列表）。
   target:
     - target: dmg
+      arch:
+        - arm64
+        - x64
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
@@ -45,6 +48,9 @@ win:
   icon: build/icon.ico
   target:
     - target: nsis
+      arch:
+        - x64
+        - arm64
 
 nsis:
   # 不做一键安装：让用户能选安装目录，这是 Windows 桌面软件的常规预期
@@ -55,5 +61,27 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Mail Master
   artifactName: Mail-Master-${version}-${arch}-setup.${ext}
+
+linux:
+  icon: build/icon.png
+  category: Network;InstantMessaging
+  maintainer: mivolt
+  vendor: Mail Master
+  description: 多账号邮件客户端，支持 IMAP / SMTP
+  # 与 dmg/nsis 同理：显式命名，避免多架构产物互相覆盖
+  artifactName: Mail-Master-${version}-${arch}.${ext}
+  target:
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+    - target: rpm
+      arch:
+        - x64
+        - arm64
 
 npmRebuild: false

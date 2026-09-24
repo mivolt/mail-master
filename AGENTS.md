@@ -21,6 +21,7 @@ macOS 多账号邮件客户端。Electron 44 + Vue 3 + TypeScript + electron-vit
 | 图标已内联进主进程产物 | 打包后资源定位不到 |
 | CI 里每处 electron-builder 调用都带 `--publish never` | 发布失败，而本地测不出来 |
 | `.gitignore` 覆盖 `verify/`、`release/`、`out/` | 真实邮箱截图与安装包进公开仓库 |
+| 版本号符合 semver 且不低于已有 tag | 版本号回退会让覆盖安装变成降级，用户分不清新旧 |
 
 每项检查都配了修复提示，失败时直接照做即可。改动依赖、打包配置或 CI 之后，
 先跑一次 `npm run preflight` 再提交。
@@ -43,6 +44,24 @@ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
 ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
 npx electron-builder --mac -c.mac.identity=null
 ```
+
+## 版本与发布规则
+
+版本号不是随手改的，按下面的规则走。前两条有 preflight 检查兜底，第三条由 CI 兜底。
+
+1. **语义化版本**。0.x 阶段：新增功能或行为变更 → 次版本号（0.2.0 → 0.3.0）；
+   缺陷修复 → 修订号（0.3.0 → 0.3.1）。
+2. **只在准备发布时改版本号**，用 `npm version <patch|minor|major> --no-git-tag-version`
+   （同时更新 package.json 与 package-lock.json）。日常提交不碰版本号。
+3. **tag 只有一种形态**：`v<版本号>`，必须与 package.json 一致。CI 的 resolve job
+   会校验，不一致直接失败。
+4. **发布只有一条路**：推 v* tag → CI 矩阵构建 → publish job 建 Release 并上传附件。
+   不要在本地手工上传附件，那会绕过矩阵构建。
+5. **版本号只增不减**（⚙️ preflight 检查）：已发布过的版本号不得回退使用。
+   要修 bug 就递增版本号重发。
+6. **Release 删掉 = 未发布**：被删除 Release 的版本号视为未占用，可原样重发
+   （重推同一个 tag，先把本地 tag 挪到最新提交：`git tag -f v<版本号>`），
+   这不算「回退版本」。
 
 ## 产品思路：偏向小米的用户理念
 
@@ -141,6 +160,13 @@ npx electron-builder --mac -c.mac.identity=null
 - **跨平台图标有两套**：macOS 菜单栏用模板图（纯黑 + alpha，系统当遮罩用，
   自动适配深浅色）；**Windows 不支持模板图**，必须用彩色实心图标，否则深色
   任务栏上看不见。见 `resources/trayTemplate*` 与 `resources/trayWindows*`。
+  Linux 复用 Windows 彩色图。
+- **Linux 的平台差异**（与 macOS / Windows 逐项核对过的）：托盘用彩色图、
+  无 Dock / 任务栏角标（`applyBadge` 在 Linux 为 no-op）、开机自启未支持
+  （`applyLaunchAtLogin` 提前返回，设置里的开关用 `SettingDefinition.platforms`
+  按平台隐藏了——**平台无效的设置项不许出现在界面上**）、系统通知走 libnotify
+  （`Notification.isSupported()` 已兜底）、关窗即退出（与 Windows 一致）。
+  这些分支 CI 能验证打包，但运行时行为要在真实 Linux 上实测过才能说「支持」。
 - **Windows 没有 Dock 角标**，要用 `win.setOverlayIcon()`；而它只能给图片，
   主进程又没有 canvas，所以数字是预先生成在 `resources/badges/` 下的。
 - **Windows 目标可在 macOS 上交叉构建**，产出 NSIS 安装包不需要 wine

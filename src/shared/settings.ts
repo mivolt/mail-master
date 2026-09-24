@@ -7,6 +7,8 @@
 
 export type SettingGroup = 'sync' | 'privacy' | 'general'
 
+export type PlatformId = 'darwin' | 'win32' | 'linux'
+
 export interface SettingOption {
   value: string
   label: string
@@ -21,6 +23,8 @@ export interface SettingDefinition {
   type: 'select' | 'toggle'
   options?: SettingOption[]
   default: string
+  /** 只在列出的平台显示。不填 = 全平台。列进来就必须在该平台真的生效 */
+  platforms?: PlatformId[]
 }
 
 export const SETTING_GROUPS: { id: SettingGroup; label: string }[] = [
@@ -90,7 +94,9 @@ export const SETTINGS: SettingDefinition[] = [
     label: '开机时自动启动',
     description: '登录后自动在后台启动，以便及时收信。关掉不影响手动打开。',
     type: 'toggle',
-    default: 'false'
+    default: 'false',
+    // Linux 的 app.setLoginItemSettings 未接入，开关在那里是摆设
+    platforms: ['darwin', 'win32']
   }
 ]
 

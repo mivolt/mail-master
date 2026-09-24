@@ -9,6 +9,7 @@
  * 把修复提示写进 hint，否则报错只会让人困惑。
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 
 const root = process.cwd()
@@ -87,6 +88,54 @@ function readJson(relative) {
     `${a}`,
     `package.json=${a} lock=${b} lock.packages[""]=${c}`
   )
+}
+
+// ---------------------------------------------------------------- 版本号规则
+{
+  const done = check(
+    '版本号符合语义化版本（X.Y.Z）',
+    '0.x 阶段：新增功能或行为变更提升次版本号，缺陷修复提升修订号。\n' +
+      '用 npm version <patch|minor|major> --no-git-tag-version 提升，两处 lock 会同步更新'
+  )
+  const version = readJson('package.json')?.version ?? ''
+  done(/^\d+\.\d+\.\d+$/.test(version), version, `「${version}」不是 X.Y.Z 形式`)
+}
+
+{
+  const done = check(
+    '版本号没有低于已有 tag（只增不减）',
+    '已发布过的版本号不能回退使用，否则用户无法判断新旧、覆盖安装会降级。\n' +
+      '要修 bug 就递增版本号重发；要重发同一版本就重推同一个 tag（Release 删掉视为未发布）'
+  )
+  const version = readJson('package.json')?.version ?? ''
+  const parse = (v) => v.split('.').map(Number)
+  const compare = (a, b) => {
+    for (let i = 0; i < 3; i++) {
+      if (a[i] !== b[i]) return a[i] - b[i]
+    }
+    return 0
+  }
+  let tags = []
+  try {
+    tags = execSync('git tag --list', { encoding: 'utf8', cwd: root })
+      .split('\n')
+      .map((tag) => tag.trim())
+      .filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag))
+      .map((tag) => parse(tag.slice(1)))
+  } catch {
+    tags = [] // 没有 git（如直接拷贝目录）时无法比较，交给 CI 的版本一致性校验兜底
+  }
+  if (tags.length === 0) {
+    done(true, `${version}（尚无 v* tag）`, '')
+  } else {
+    const max = tags.reduce((a, b) => (compare(b, a) > 0 ? b : a))
+    const maxLabel = `v${max.join('.')}`
+    done(
+      compare(parse(version), max) >= 0,
+      `${version}（最新 tag ${maxLabel}）`,
+      `${version} 低于最新 tag ${maxLabel}，版本号不能回退`
+    )
+  }
 }
 
 // ------------------------------------------------------ 打包脚本必须禁自动发布

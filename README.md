@@ -118,13 +118,13 @@ macOS 多账号邮件客户端，基于 IMAP / SMTP 通用协议。把多个邮�
 
 ### macOS
 
-从 [Releases](https://github.com/mivolt/mail-master/releases) 下载最新的 `Mail-Master-x.y.z-arm64.dmg`：
+从 [Releases](https://github.com/mivolt/mail-master/releases) 下载对应的 DMG——Apple 芯片（M 系列）选 `Mail-Master-x.y.z-arm64.dmg`，Intel 芯片选 `Mail-Master-x.y.z-x64.dmg`：
 
 1. 双击挂载，把 Mail Master 拖进 Applications
 2. 首次打开若被 Gatekeeper 拦截：右键图标选「打开」，或执行
    `xattr -dr com.apple.quarantine "/Applications/Mail Master.app"`
 
-要求 macOS 11 或更高、Apple Silicon（arm64）。
+要求 macOS 11 或更高。不确定芯片型号：「苹果菜单 → 关于本机」看「芯片」——写 Apple M 系列选 arm64，写 Intel 选 x64。
 
 > **在 Apple 芯片上不要装 x64 版本。** macOS 26 起，运行基于 Intel 的 App 会弹出「对基于 Intel 的 App 的支持即将结束」的警告——因为 Intel 版本要通过 Rosetta 转译。确认自己装的是哪个架构：
 > ```bash
@@ -133,11 +133,21 @@ macOS 多账号邮件客户端，基于 IMAP / SMTP 通用协议。把多个邮�
 
 ### Windows
 
-从 Releases 下载最新的 `Mail-Master-x.y.z-x64-setup.exe`，双击安装。安装向导可以选安装目录，并会创建桌面与开始菜单快捷方式。
+从 Releases 下载对应的安装包，双击安装。绝大多数 PC 选 `Mail-Master-x.y.z-x64-setup.exe`；Surface Pro X、骁龙笔记本等 ARM 设备选 `Mail-Master-x.y.z-arm64-setup.exe`。安装向导可以选安装目录，并会创建桌面与开始菜单快捷方式。
 
-要求 Windows 10 或更高（x64）。
+要求 Windows 10 或更高。
 
 > **产物未签名**，首次运行 Windows SmartScreen 会提示「已保护你的电脑」。点「更多信息」→「仍要运行」即可。
+
+### Linux
+
+从 Releases 下载对应架构与格式的包（`x86_64` / `amd64` 为常见 64 位 PC，`arm64` / `aarch64` 为 ARM 设备）：
+
+- **AppImage**（通用，免安装）：`chmod +x Mail-Master-x.y.z-x86_64.AppImage` 后直接运行。需要 FUSE（多数发行版已内置）
+- **deb**（Debian / Ubuntu 及衍生版）：`sudo dpkg -i Mail-Master-x.y.z-amd64.deb`
+- **rpm**（Fedora / openSUSE 等）：`sudo dnf install ./Mail-Master-x.y.z.x86_64.rpm`
+
+要求桌面环境提供系统托盘与 libnotify（通知）。若系统没有密钥环服务（gnome-keyring / kwallet），授权码会以明文存储在本地数据库，详见「已知限制」。
 
 ## 支持的邮箱
 
@@ -301,7 +311,13 @@ npm version patch        # 或 minor / major，会同时改 package.json 并打 
 git push --follow-tags
 ```
 
-`.github/workflows/release.yml` 会在 macOS runner 上安装依赖、跑类型检查与核心测试、打包 arm64 镜像、**校验产物确实是纯 arm64**（防止误发 Intel 版），然后创建 Release 并上传 DMG。发布说明由 GitHub 按提交记录自动生成，发布后可以手动编辑。
+`.github/workflows/release.yml` 推送 tag 后会依次执行：先做标准检查并校验 tag 与 package.json 版本一致，然后在三个平台的 runner 上并行构建（任一平台失败不影响其他平台），最后由 publish job 统一创建 Release 并上传全部附件。各平台产物：
+
+| runner | 产物 |
+| --- | --- |
+| macOS | DMG × arm64 / x64，并逐一校验可执行文件架构，防止发错 |
+| Windows | NSIS 安装包 × x64 / arm64 |
+| Linux | AppImage / deb / rpm × x64 / arm64 |
 
 权限来自 GitHub 自动注入的 `GITHUB_TOKEN`，**不需要配置任何 secrets**。公开仓库的 Actions 分钟数免费无限。
 
@@ -312,10 +328,11 @@ git push --follow-tags
 ### 本地打包
 
 ```bash
-npm run dist:mac        # macOS arm64（默认只出这个）
-npm run dist:mac:x64    # 需要 Intel 版时显式构建
-npm run dist:win        # Windows x64，产出 NSIS 安装包
-npm run dist:win:arm64  # Windows on ARM
+npm run dist:mac        # macOS arm64
+npm run dist:mac:x64    # macOS x64（交叉构建）
+npm run dist:win        # Windows x64
+npm run dist:win:arm64  # Windows on ARM（交叉构建）
+npm run dist:linux      # Linux 三格式双架构（仅能在 Linux 上构建）
 ```
 
 国内网络需要加镜像变量，否则 electron-builder 会在下载二进制时超时：
@@ -342,7 +359,8 @@ Windows 目标可以在 macOS 上交叉构建（本机已验证能产出 NSIS �
 - **搜索是本地 `LIKE` 匹配**，范围限于已同步的邮件，不是服务端全文检索。
 - **草稿箱只读。** 写信过程中关闭窗口内容会丢失，尚未接入 IMAP APPEND 保存草稿。
 - **未实现 OAuth2**，因此 Gmail 需应用专用密码，且账号安全策略更严格的企业邮箱可能拒绝基础认证。
-- **平台支持**：macOS（已在真实邮箱上实测）与 Windows（已能构建并打包，但**尚未在 Windows 机器上实测过运行**——需要有人帮忙验证）。Linux 未适配。
+- **平台支持**：macOS（已在真实邮箱上实测）；Windows 与 Linux（CI 能构建出安装包，但**尚未在真实机器上实测过运行**，需要有人帮忙验证）。Linux 还有几点平台差异：无 Dock / 任务栏角标、开机自启不可用（设置里不显示该项）、托盘图标为彩色实心图。
+- **Linux 无密钥环时授权码明文存储。** 密码加密依赖系统密钥环（gnome-keyring / kwallet）；都没有时，授权码会以 `MMPLAIN1:` 前缀明文写入本地数据库——数据仍只在你电脑上、不经第三方，但请知晓这一降级。设置 → 数据里能看到当前状态。
 - **移动端不做**：Electron 不支持 iOS / Android。而且 iOS 不允许后台长期保持 IMAP 连接，要做到实时推送必须引入服务器，那会违背「邮件不经过第三方」的承诺。详见下方说明。
 
 ## 技术选型说明

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import Modal from './Modal.vue'
-import { SETTINGS, SETTING_GROUPS, type AppSettings } from '@shared/settings'
+import { SETTINGS, SETTING_GROUPS, type AppSettings, type PlatformId } from '@shared/settings'
 import type { StorageInfo } from '@shared/types'
 import { useSettingsStore } from '../stores/settings'
 import { useUiStore } from '../stores/ui'
@@ -18,7 +18,12 @@ const clearing = ref(false)
 const grouped = computed(() =>
   SETTING_GROUPS.map((group) => ({
     ...group,
-    items: SETTINGS.filter((item) => item.group === group.id)
+    items: SETTINGS.filter(
+      (item) =>
+        item.group === group.id &&
+        (!item.platforms ||
+          item.platforms.includes(window.api.app.platform as PlatformId))
+    )
   })).filter((group) => group.items.length > 0)
 )
 

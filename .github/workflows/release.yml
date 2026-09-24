@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '要发布的版本号，需与 package.json 一致（如 0.2.0）'
+        description: '要发布的版本号，需与 package.json 一致（如 0.3.0）'
         required: true
         type: string
 
@@ -61,11 +61,14 @@ jobs:
       matrix:
         include:
           - os: macos-14
-            artifact: macos-arm64
-            build_args: '--mac --arm64 -c.mac.identity=null'
+            artifact: macos
+            build_args: '--mac -c.mac.identity=null'
           - os: windows-latest
-            artifact: windows-x64
-            build_args: '--win --x64'
+            artifact: windows
+            build_args: '--win'
+          - os: ubuntu-latest
+            artifact: linux
+            build_args: '--linux'
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -102,16 +105,19 @@ jobs:
         # 发布由后面的 publish job 统一负责。
         run: npx electron-builder ${{ matrix.build_args }} --publish never
 
-      - name: 校验产物确实是纯 arm64（仅 macOS）
+      - name: 校验产物架构（仅 macOS）
         if: matrix.os == 'macos-14'
         run: |
-          APP="release/mac-arm64/Mail Master.app"
-          ARCH="$(lipo -archs "$APP/Contents/MacOS/Mail Master")"
-          echo "主可执行文件架构：$ARCH"
-          if [ "$ARCH" != "arm64" ]; then
-            echo "::error::产物不是纯 arm64，会触发 macOS 的 Intel 弃用警告"
-            exit 1
-          fi
+          check() {
+            ARCH="$(lipo -archs "$1/Contents/MacOS/Mail Master")"
+            echo "$1 → $ARCH"
+            if [ "$ARCH" != "$2" ]; then
+              echo "::error::期望 $2，实际 $ARCH（错误架构会触发 macOS 对 Intel 应用的弃用警告）"
+              exit 1
+            fi
+          }
+          check "release/mac-arm64/Mail Master.app" arm64
+          check "release/mac/Mail Master.app" x86_64
         shell: bash
 
       - name: 列出产物
@@ -127,6 +133,9 @@ jobs:
             release/*.dmg
             release/*.exe
             release/*.blockmap
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
           retention-days: 7
 
   publish:

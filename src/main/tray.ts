@@ -22,6 +22,7 @@ function loadIcon(): Electron.NativeImage {
     : nativeImage.createFromPath(source)
   // 模板图是 macOS 专有能力（系统拿 alpha 当遮罩自动适配深浅色）。
   // Windows 不支持模板图，必须用彩色图标，否则深色任务栏上看不见。
+  // Linux 复用 Windows 的彩色图。
   if (isMac) image.setTemplateImage(true)
   return image
 }
