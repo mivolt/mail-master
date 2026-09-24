@@ -133,7 +133,7 @@ macOS 多账号邮件客户端，基于 IMAP / SMTP 通用协议。把多个邮�
 
 ### Windows
 
-从 Releases 下载对应的安装包，双击安装。绝大多数 PC 选 `Mail-Master-x.y.z-x64-setup.exe`；Surface Pro X、骁龙笔记本等 ARM 设备选 `Mail-Master-x.y.z-arm64-setup.exe`。安装向导可以选安装目录，并会创建桌面与开始菜单快捷方式。
+从 Releases 下载对应的安装包，双击安装。绝大多数 PC 选 `Mail-Master-x.y.z-x64-setup.exe`；Surface Pro X、骁龙笔记本等 ARM 设备选 `Mail-Master-x.y.z-arm64-setup.exe`；分不清架构就下 `Mail-Master-x.y.z-setup.exe`——内含两种架构，安装时自动选择（体积约为单架构的两倍）。安装向导可以选安装目录，并会创建桌面与开始菜单快捷方式。
 
 要求 Windows 10 或更高。
 
