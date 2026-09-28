@@ -7,7 +7,7 @@ import * as messagesRepo from '../db/messages'
 import { currentOrDefault } from '../db/settings'
 import { decryptSecret } from '../security/vault'
 import {
-  createImapClient,
+  connectImap,
   fetchFolderMetadata,
   fetchMessageSources,
   folderStatus,
@@ -97,7 +97,7 @@ export class AccountWorker {
 
     this.connectPromise = (async () => {
       const { account, secret } = this.resolveAccount()
-      const client = createImapClient({
+      const { client } = await connectImap({
         host: account.imapHost,
         port: account.imapPort,
         secure: account.imapSecure,
@@ -105,7 +105,6 @@ export class AccountWorker {
         pass: secret
       })
       this.attachListeners(client)
-      await client.connect()
       this.client = client
       this.retryDelay = RECONNECT_BASE_DELAY
       return client

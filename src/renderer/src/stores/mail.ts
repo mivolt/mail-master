@@ -102,7 +102,7 @@ export const useMailStore = defineStore('mail', () => {
     // 默认是否加载远程图片跟随设置，单封邮件上仍可临时放行
     blockImages.value = useSettingsStore().blockRemoteImages
     try {
-      const detail = await window.api.mail.get(meta.id, true)
+      const detail = await window.api.mail.get(meta.id, blockImages.value)
       active.value = detail
       const row = items.value.find((item) => item.id === meta.id)
       if (row && detail) {

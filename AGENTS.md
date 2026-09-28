@@ -161,6 +161,9 @@ npx electron-builder --mac -c.mac.identity=null
   自动适配深浅色）；**Windows 不支持模板图**，必须用彩色实心图标，否则深色
   任务栏上看不见。见 `resources/trayTemplate*` 与 `resources/trayWindows*`。
   Linux 复用 Windows 彩色图。
+- **托盘图标必须 1x + 2x 双表示注册**：`nativeImage.addRepresentation`
+  分别挂 16px 与 32px；只加载 @2x 图（data URL 不带 DPI 信息）会被当成
+  32pt 渲染——菜单栏里比邻居图标大一圈，还发虚。
 - **Linux 的平台差异**（与 macOS / Windows 逐项核对过的）：托盘用彩色图、
   无 Dock / 任务栏角标（`applyBadge` 在 Linux 为 no-op）、开机自启未支持
   （`applyLaunchAtLogin` 提前返回，设置里的开关用 `SettingDefinition.platforms`

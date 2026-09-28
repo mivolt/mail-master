@@ -6,13 +6,24 @@ import type {
   MessageStructureObject,
   StatusObject
 } from 'imapflow'
+import { describeNoTlsError, isWrongTlsModeError } from './errors'
 
 export interface ImapConfig {
   host: string
   port: number
   secure: boolean
+  /** 配合 secure:false 使用：必须成功 STARTTLS，服务器不支持时明确报错而不是明文继续 */
+  doSTARTTLS?: boolean
   user: string
   pass: string
+}
+
+export type ImapTlsMode = 'ssl' | 'starttls' | 'plain'
+
+export interface ImapConnectResult {
+  client: ImapFlow
+  /** 实际生效的连接方式：ssl=隐式TLS；starttls=明文端口升级；plain=未加密 */
+  tls: ImapTlsMode
 }
 
 export const CLIENT_INFO = {
@@ -29,12 +40,64 @@ export function createImapClient(
     host: config.host,
     port: config.port,
     secure: config.secure,
+    doSTARTTLS: config.doSTARTTLS === true,
     auth: { user: config.user, pass: config.pass },
     clientInfo: CLIENT_INFO,
     logger: logger ?? false,
     greetingTimeout: 20000,
     socketTimeout: 180000
   })
+}
+
+function socketEncrypted(client: ImapFlow): boolean {
+  const socket = (client as unknown as { socket?: { encrypted?: boolean } }).socket
+  return socket?.encrypted === true
+}
+
+/**
+ * 建立连接并返回实际使用的加密方式。「加密」开关只表达意图：
+ * 开 = 强加密——隐式 TLS 失败（端口不是 SSL 端口）自动改走 STARTTLS，
+ * 服务器不支持 STARTTLS 就明确报错，绝不静默降级成明文；
+ * 关 = 尽力加密——服务器广告 STARTTLS 就升级，否则明文（用户显式选择，
+ * 常见于只开 143/25 的内网企业邮箱）。
+ */
+export async function connectImap(
+  config: ImapConfig,
+  logger?: ImapFlowOptions['logger']
+): Promise<ImapConnectResult> {
+  const open = async (secure: boolean, doSTARTTLS: boolean): Promise<ImapFlow> => {
+    const client = createImapClient({ ...config, secure, doSTARTTLS }, logger)
+    try {
+      await client.connect()
+      return client
+    } catch (error) {
+      try {
+        client.close()
+      } catch {
+        // 连接从未建立，无需清理
+      }
+      throw error
+    }
+  }
+
+  if (config.secure) {
+    let client: ImapFlow
+    try {
+      client = await open(true, false)
+      return { client, tls: 'ssl' }
+    } catch (first) {
+      if (!isWrongTlsModeError(first)) throw first
+    }
+    try {
+      client = await open(false, true)
+      return { client, tls: 'starttls' }
+    } catch (second) {
+      throw describeNoTlsError(second)
+    }
+  }
+
+  const client = await open(false, false)
+  return { client, tls: socketEncrypted(client) ? 'starttls' : 'plain' }
 }
 
 export interface RemoteFolder {

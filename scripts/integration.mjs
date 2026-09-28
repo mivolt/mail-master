@@ -854,6 +854,42 @@ check(
 )
 await page.screenshot({ path: join(shotDir, '04-images-shown.png') })
 
+// 5b. 回归：设置里关掉「默认不加载远程图片」后，点开邮件应直接显示图片。
+//     曾经列表点开时写死按「拦截」请求详情，开关形同虚设。
+await page.locator('aside button', { hasText: '设置' }).first().click()
+await page.waitForSelector('.dialog-panel button[data-setting="blockRemoteImages"]', { timeout: 8000 })
+await page.locator('.dialog-panel button[data-setting="blockRemoteImages"]').click()
+await page.waitForTimeout(600)
+const disabledBlocking = await page.evaluate(() => window.api.settings.get())
+check(
+  '回归前置：图片拦截已关闭',
+  disabledBlocking.blockRemoteImages === false,
+  `blockRemoteImages=${disabledBlocking.blockRemoteImages}`
+)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+
+await openRow('第三封：中文主题与 HTML 正文')
+let hintWhileDisabled = true
+for (let attempt = 0; attempt < 10; attempt += 1) {
+  await page.waitForTimeout(300)
+  hintWhileDisabled = await page.evaluate(() => document.body.innerText.includes('显示图片'))
+  if (!hintWhileDisabled) break
+}
+check(
+  '关闭拦截后打开邮件不出现「显示图片」提示',
+  hintWhileDisabled === false,
+  hintWhileDisabled ? '仍被拦截' : ''
+)
+
+// 还原设置，避免影响后续用例
+await page.locator('aside button', { hasText: '设置' }).first().click()
+await page.waitForSelector('.dialog-panel button[data-setting="blockRemoteImages"]', { timeout: 8000 })
+await page.locator('.dialog-panel button[data-setting="blockRemoteImages"]').click()
+await page.waitForTimeout(600)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+
 // 6. 打开带附件的邮件
 await openRow('第二封：带附件的邮件')
 const readerText = await waitForReaderSubject('第二封：带附件的邮件')

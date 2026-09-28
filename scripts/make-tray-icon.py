@@ -1,9 +1,10 @@
 """生成菜单栏 / 任务栏图标。
 
 macOS 用模板图（纯黑 + alpha，系统当遮罩用，自动适配深浅色菜单栏）；
-Windows 不支持模板图，必须用彩色实心图标，否则深色任务栏上看不见。
+Windows / Linux 不支持模板图，必须用彩色实心图标，否则深色任务栏上看不见。
 
-用 8 倍超采样绘制再缩下来，保证 16px 下边缘依然干净。
+实心剪影 + 镂空折盖缝，对齐系统图标风格；8 倍超采样绘制再缩下来，
+保证 16px 下边缘依然干净。1x 与 2x 必须成对产出，加载侧按表示分离注册。
 """
 
 import base64
@@ -15,51 +16,39 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "resources")
 SUPERSAMPLE = 8
 
+# 信封主体在 16pt 画布里的几何（菜单栏图标光学尺寸：宽 13pt、高 8.4pt）
+BODY = (1.5, 4.0, 14.5, 12.4)
+RADIUS = 1.4
+GROOVE_WIDTH = 1.3
+GROOVE_BOTTOM = 9.5
 
-def draw_envelope_outline(size: int) -> Image.Image:
-    """macOS 模板图：信封轮廓，纯黑 + alpha。"""
+
+def draw_envelope_solid(size: int, template: bool) -> Image.Image:
+    """实心信封剪影。template=True 输出纯黑 + alpha；False 输出蓝色实心。"""
     scale = size / 16.0
-    image = Image.new("L", (size * SUPERSAMPLE, size * SUPERSAMPLE), 0)
+    canvas = size * SUPERSAMPLE
+    if template:
+        image = Image.new("L", (canvas, canvas), 0)
+        fill, groove = 255, 0
+    else:
+        image = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+        fill, groove = (10, 132, 255, 255), (0, 0, 0, 0)
+
     draw = ImageDraw.Draw(image)
 
     def px(value: float) -> float:
         return value * scale * SUPERSAMPLE
 
-    stroke = max(1, round(1.15 * scale * SUPERSAMPLE))
-    left, top, right, bottom = px(1.6), px(4.2), px(14.4), px(12.6)
-    radius = px(1.2)
+    left, top, right, bottom = (px(v) for v in BODY)
+    draw.rounded_rectangle([left, top, right, bottom], radius=px(RADIUS), fill=fill)
 
-    draw.rounded_rectangle(
-        [left, top, right, bottom], radius=radius, outline=255, width=stroke
-    )
-    mid_x, mid_y = (left + right) / 2, px(8.9)
-    draw.line([(left, top), (mid_x, mid_y), (right, top)], fill=255, width=stroke, joint="curve")
-
-    return image.resize((size, size), Image.LANCZOS)
-
-
-def draw_envelope_filled(size: int) -> Image.Image:
-    """Windows 任务栏图标：彩色实心信封，浅色与深色任务栏都能看清。"""
-    scale = size / 16.0
-    image = Image.new("RGBA", (size * SUPERSAMPLE, size * SUPERSAMPLE), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-
-    def px(value: float) -> float:
-        return value * scale * SUPERSAMPLE
-
-    stroke = max(1, round(1.5 * scale * SUPERSAMPLE))
-    left, top, right, bottom = px(1.3), px(3.7), px(14.7), px(12.7)
-    radius = px(1.5)
-
-    draw.rounded_rectangle([left, top, right, bottom], radius=radius, fill=(10, 132, 255, 255))
-
-    # 折盖用深一档的蓝，制造层次；两端内缩避免戳出圆角
-    inset = radius * 0.45
-    mid_x, mid_y = (left + right) / 2, px(9.2)
+    # 折盖缝：从上边缘两角向中心下方镂空，V 形，缝里透出菜单栏底色
+    inset = px(RADIUS) * 0.5
+    mid_x = (left + right) / 2
     draw.line(
-        [(left + inset, top + inset), (mid_x, mid_y), (right - inset, top + inset)],
-        fill=(0, 96, 223, 255),
-        width=stroke,
+        [(left + inset, top + inset), (mid_x, px(GROOVE_BOTTOM)), (right - inset, top + inset)],
+        fill=groove,
+        width=max(1, round(px(GROOVE_WIDTH))),
         joint="curve",
     )
 
@@ -114,12 +103,12 @@ def main() -> None:
 
     for suffix, size in (("", 16), ("@2x", 32)):
         path = os.path.join(OUT_DIR, f"trayTemplate{suffix}.png")
-        draw_envelope_outline(size).save(path)
+        draw_envelope_solid(size, template=True).save(path)
         report(path, size)
 
     for suffix, size in (("", 16), ("@2x", 32)):
         path = os.path.join(OUT_DIR, f"trayWindows{suffix}.png")
-        draw_envelope_filled(size).save(path)
+        draw_envelope_solid(size, template=False).save(path)
         report(path, size)
 
     # Windows 任务栏角标：1-9 与 9+，共 10 张
@@ -134,13 +123,17 @@ def main() -> None:
 
     preview = Image.new("RGBA", (540, 260), (245, 245, 247, 255))
     preview.paste(
-        draw_envelope_outline(16).resize((128, 128), Image.NEAREST).convert("RGBA"), (40, 40)
+        draw_envelope_solid(16, template=True).resize((128, 128), Image.NEAREST).convert("RGBA"),
+        (40, 40),
     )
     preview.paste(
-        draw_envelope_filled(16).resize((128, 128), Image.NEAREST).convert("RGBA"), (200, 40)
+        draw_envelope_solid(16, template=False).resize((128, 128), Image.NEAREST).convert("RGBA"),
+        (200, 40),
     )
     dark = Image.new("RGBA", (128, 128), (32, 32, 34, 255))
-    dark.alpha_composite(draw_envelope_filled(16).resize((128, 128), Image.NEAREST))
+    dark.alpha_composite(
+        draw_envelope_solid(16, template=False).resize((128, 128), Image.NEAREST)
+    )
     preview.paste(dark, (360, 40))
     preview.paste(draw_badge(32, "7").resize((128, 128), Image.LANCZOS), (40, 190))
     preview.paste(draw_badge(32, "9+").resize((128, 128), Image.LANCZOS), (200, 190))

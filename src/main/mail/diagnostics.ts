@@ -3,8 +3,8 @@ import { release, arch } from 'node:os'
 import type { AccountInput, DiagReport } from '@shared/types'
 import { presetById } from '@shared/presets'
 import { describeMailError, withTimeout } from './errors'
-import { createImapClient, listRemoteFolders } from './imap'
-import { createTransport } from './smtp'
+import { connectImap, listRemoteFolders, type ImapTlsMode } from './imap'
+import { SMTP_TLS_LABEL, verifySmtp, type SmtpTlsMode } from './smtp'
 
 const MAX_LOG_LINES = 120
 const CONNECT_TIMEOUT_MS = 25000
@@ -32,7 +32,13 @@ function formatTime(date: Date): string {
 }
 
 function flag(secure: boolean): string {
-  return secure ? 'SSL' : 'STARTTLS'
+  return secure ? 'SSL' : '自动（优先 STARTTLS）'
+}
+
+const IMAP_TLS_LABEL: Record<ImapTlsMode, string> = {
+  ssl: 'SSL 直连',
+  starttls: 'STARTTLS',
+  plain: '明文（未加密）'
 }
 
 /**
@@ -101,57 +107,62 @@ export async function runDiagnostics(input: AccountInput): Promise<DiagReport> {
   let smtpReason = ''
   let authFailed = false
 
-  const client = createImapClient(
-    {
-      host: input.imapHost,
-      port: input.imapPort,
-      secure: input.imapSecure,
-      user: input.username,
-      pass: input.secret
-    },
-    logger
-  )
-
   try {
-    await withTimeout(client.connect(), CONNECT_TIMEOUT_MS, 'IMAP 连接')
-    const folders = await listRemoteFolders(client)
-    imapOk = true
-    imapReason = `连接成功，读取到 ${folders.length} 个文件夹`
-    push(
-      `文件夹：${folders
-        .map((item) => `${item.path}${item.specialUse ? ` ${item.specialUse}` : ''}`)
-        .join(' | ')}`
+    const { client, tls } = await withTimeout(
+      connectImap(
+        {
+          host: input.imapHost,
+          port: input.imapPort,
+          secure: input.imapSecure,
+          user: input.username,
+          pass: input.secret
+        },
+        logger
+      ),
+      CONNECT_TIMEOUT_MS,
+      'IMAP 连接'
     )
+    try {
+      const folders = await listRemoteFolders(client)
+      imapOk = true
+      imapReason = `连接成功（${IMAP_TLS_LABEL[tls]}），读取到 ${folders.length} 个文件夹`
+      push(
+        `文件夹：${folders
+          .map((item) => `${item.path}${item.specialUse ? ` ${item.specialUse}` : ''}`)
+          .join(' | ')}`
+      )
+    } finally {
+      try {
+        await Promise.race([client.logout(), new Promise((resolve) => setTimeout(resolve, 3000))])
+      } catch {
+        /* noop */
+      }
+    }
   } catch (error) {
     const info = describeMailError(error)
     imapReason = info.message
     authFailed = authFailed || info.authenticationFailed
     push(`IMAP 错误：${info.message}`)
-  } finally {
-    try {
-      await Promise.race([client.logout(), new Promise((resolve) => setTimeout(resolve, 3000))])
-    } catch {
-      /* noop */
-    }
   }
 
-  const transport = createTransport({
-    host: input.smtpHost,
-    port: input.smtpPort,
-    secure: input.smtpSecure,
-    user: input.username,
-    pass: input.secret
-  })
   try {
-    await withTimeout(transport.verify(), CONNECT_TIMEOUT_MS, 'SMTP 连接')
+    const tls: SmtpTlsMode = await withTimeout(
+      verifySmtp({
+        host: input.smtpHost,
+        port: input.smtpPort,
+        secure: input.smtpSecure,
+        user: input.username,
+        pass: input.secret
+      }),
+      CONNECT_TIMEOUT_MS,
+      'SMTP 连接'
+    )
     smtpOk = true
-    smtpReason = '连接成功，认证通过'
+    smtpReason = `连接成功，认证通过（${SMTP_TLS_LABEL[tls]}）`
   } catch (error) {
     const info = describeMailError(error)
     smtpReason = info.message
     authFailed = authFailed || info.authenticationFailed
-  } finally {
-    transport.close()
   }
 
   const preset = presetById(input.provider)

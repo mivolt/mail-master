@@ -1,7 +1,11 @@
 import { Menu, Tray, nativeImage } from 'electron'
-// 图标很小（<1KB），Vite 会内联成 data URL，因此不必处理开发/打包的路径差异
-import trayTemplateIcon from '../../resources/trayTemplate@2x.png'
-import trayWindowsIcon from '../../resources/trayWindows@2x.png'
+// 图标很小（<1KB），Vite 会内联成 data URL，因此不必处理开发/打包的路径差异。
+// 1x 与 2x 必须分别注册为两个表示：只给 2x 图会被当成 32pt 渲染，
+// 菜单栏里比邻居图标大一圈（正是「图标太大」反馈的根源）。
+import trayTemplate1x from '../../resources/trayTemplate.png'
+import trayTemplate2x from '../../resources/trayTemplate@2x.png'
+import trayWindows1x from '../../resources/trayWindows.png'
+import trayWindows2x from '../../resources/trayWindows@2x.png'
 
 export interface TrayHandlers {
   onOpen: () => void
@@ -14,17 +18,21 @@ let tray: Tray | null = null
 let unread = 0
 let handlers: TrayHandlers | null = null
 
+function loadImage(one: string, two: string, isTemplate: boolean): Electron.NativeImage {
+  const image = nativeImage.createEmpty()
+  image.addRepresentation({ scaleFactor: 1, dataURL: one })
+  image.addRepresentation({ scaleFactor: 2, dataURL: two })
+  // 模板图是 macOS 专有能力（系统拿 alpha 当遮罩自动适配深浅色）。
+  // Windows / Linux 不支持模板图，必须用彩色图标，否则深色任务栏上看不见。
+  if (isTemplate) image.setTemplateImage(true)
+  return image
+}
+
 function loadIcon(): Electron.NativeImage {
   const isMac = process.platform === 'darwin'
-  const source = isMac ? trayTemplateIcon : trayWindowsIcon
-  const image = source.startsWith('data:')
-    ? nativeImage.createFromDataURL(source)
-    : nativeImage.createFromPath(source)
-  // 模板图是 macOS 专有能力（系统拿 alpha 当遮罩自动适配深浅色）。
-  // Windows 不支持模板图，必须用彩色图标，否则深色任务栏上看不见。
-  // Linux 复用 Windows 的彩色图。
-  if (isMac) image.setTemplateImage(true)
-  return image
+  return isMac
+    ? loadImage(trayTemplate1x, trayTemplate2x, true)
+    : loadImage(trayWindows1x, trayWindows2x, false)
 }
 
 function buildMenu(): Electron.Menu {

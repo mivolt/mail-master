@@ -20,7 +20,8 @@ const COMMON = {
 
 const TARGETS = [
   { entry: 'scripts/mail-tests.ts', out: 'verify/mail-tests.mjs', label: 'MIME 解析与 SMTP 发信' },
-  { entry: 'scripts/imap-tests.ts', out: 'verify/imap-tests.mjs', label: 'IMAP 同步与标记' }
+  { entry: 'scripts/imap-tests.ts', out: 'verify/imap-tests.mjs', label: 'IMAP 同步与标记' },
+  { entry: 'scripts/tls-tests.ts', out: 'verify/tls-tests.mjs', label: 'TLS 与加密降级' }
 ]
 
 let failed = false

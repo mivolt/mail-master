@@ -26,7 +26,7 @@ import { readSettings, writeSetting } from '../db/settings'
 import { applyLaunchAtLogin } from '../autostart'
 import { SETTINGS, type AppSettings } from '@shared/settings'
 import type { MailEngine } from '../mail/engine'
-import { createImapClient, listRemoteFolders, type ImapConfig } from '../mail/imap'
+import { connectImap, listRemoteFolders, type ImapConfig } from '../mail/imap'
 import { runDiagnostics } from '../mail/diagnostics'
 import { describeMailError, withTimeout, AUTH_HINT } from '../mail/errors'
 import { buildEmailDocument, buildPlainTextDocument, sanitizeEmailHtml } from '../mail/parser'
@@ -92,9 +92,8 @@ function toSmtpConfig(input: AccountInput): SmtpConfig {
 const VERIFY_TIMEOUT_MS = 30000
 
 async function verifyImap(config: ImapConfig): Promise<void> {
-  const client = createImapClient(config)
+  const { client } = await connectImap(config)
   try {
-    await client.connect()
     await listRemoteFolders(client)
   } finally {
     try {

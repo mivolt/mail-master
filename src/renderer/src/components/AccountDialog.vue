@@ -464,9 +464,12 @@ async function remove(): Promise<void> {
                   type="number"
                   class="h-8 w-full rounded-md border border-line bg-bg px-2.5 text-[12.5px] focus:border-accent focus:outline-none"
                 />
-                <label class="flex items-center gap-1.5 text-[12px] whitespace-nowrap text-ink2">
+                <label
+                  class="flex items-center gap-1.5 text-[12px] whitespace-nowrap text-ink2"
+                  title="开启时必须加密才连接；关闭时优先 STARTTLS，服务器不支持则明文连接"
+                >
                   <input v-model="form.imapSecure" type="checkbox" />
-                  SSL
+                  加密
                 </label>
               </div>
             </div>
@@ -487,13 +490,21 @@ async function remove(): Promise<void> {
                   type="number"
                   class="h-8 w-full rounded-md border border-line bg-bg px-2.5 text-[12.5px] focus:border-accent focus:outline-none"
                 />
-                <label class="flex items-center gap-1.5 text-[12px] whitespace-nowrap text-ink2">
+                <label
+                  class="flex items-center gap-1.5 text-[12px] whitespace-nowrap text-ink2"
+                  title="开启时必须加密才连接；关闭时优先 STARTTLS，服务器不支持则明文连接"
+                >
                   <input v-model="form.smtpSecure" type="checkbox" />
-                  SSL
+                  加密
                 </label>
               </div>
             </div>
           </div>
+
+          <p class="text-[11px] leading-relaxed text-faint">
+            「加密」开启：连不上 SSL 会自动改用 STARTTLS，服务器完全不支持加密时明确报错。
+            关闭：优先 STARTTLS，不支持则以明文连接——仅建议公司内网邮箱关闭。
+          </p>
         </div>
       </div>
 
