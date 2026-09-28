@@ -1,8 +1,9 @@
-"""从生成的底图制作 macOS 应用图标。
+"""制作 macOS / Windows / Linux 应用图标。
 
-生成服务的底图右下角带有品牌水印，且水印位于背景渐变上。由于背景是纯垂直渐变，
-这里逐行采样左侧干净列重建背景，再按「信封 alpha」合成，从而完全去掉水印；
-随后套用 macOS 的 superellipse 圆角遮罩，并按 Apple 的图标网格（824/1024）排布。
+信封图形（项目 logo，用户提供并指定的 SVG）由 make-icon-envelope.cjs 用
+sharp 渲染成白色透明底位图；这里为它合成品牌蓝垂直渐变背景，套用 macOS
+的 superellipse 圆角遮罩，并按 Apple 的图标网格（824/1024）排布，
+最后产出 .icns / .ico / iconset 全套。
 """
 
 import os
@@ -13,7 +14,7 @@ import numpy as np
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE = os.path.join(ROOT, "build", "icon-source.png")
+ENVELOPE = os.path.join(ROOT, "build", "envelope-alpha.png")
 MASTER = os.path.join(ROOT, "build", "icon.png")
 ICONSET = os.path.join(ROOT, "build", "icon.iconset")
 ICNS = os.path.join(ROOT, "build", "icon.icns")
@@ -21,10 +22,8 @@ ICNS = os.path.join(ROOT, "build", "icon.icns")
 CANVAS = 1024
 ARTWORK = 824          # Apple 图标网格中圆角方块占画布的比例
 SQUIRCLE_N = 5.0       # Apple squircle 的指数
-# 背景蓝 (B-R) 约为 197~223，白色信封约为 1，水印约为 115。
-# 以 100 为界可把水印一并归入背景。
-ALPHA_HIGH = 100.0
-ALPHA_RANGE = 90.0
+GRADIENT_TOP = (62, 155, 255)     # #3E9BFF
+GRADIENT_BOTTOM = (11, 98, 232)   # #0B62E8
 
 
 def squircle_mask(size: int, supersample: int = 4) -> Image.Image:
@@ -37,27 +36,23 @@ def squircle_mask(size: int, supersample: int = 4) -> Image.Image:
 
 
 def main() -> None:
-    source = Image.open(SOURCE).convert("RGB")
-    pixels = np.asarray(source).astype(np.float32)
-    height, width, _ = pixels.shape
+    envelope = Image.open(ENVELOPE).convert("RGBA")
 
-    # 1) 逐行用左侧干净列重建背景渐变，天然抹掉右下角水印
-    clean_columns = pixels[:, 2:42, :].mean(axis=1)          # (height, 3)
-    background = np.repeat(clean_columns[:, None, :], width, axis=1)
+    # 1) 品牌蓝垂直渐变背景
+    rows = np.linspace(0.0, 1.0, CANVAS)[:, None]
+    top = np.asarray(GRADIENT_TOP, dtype=np.float32)
+    bottom = np.asarray(GRADIENT_BOTTOM, dtype=np.float32)
+    background = (top * (1.0 - rows) + bottom * rows)[:, None, :]
+    background = np.repeat(background, CANVAS, axis=1).astype(np.uint8)
+    artwork = Image.fromarray(background, mode="RGB").convert("RGBA")
 
-    # 2) 由 B-R 推导信封的软 alpha：白色→1，背景与水印→0
-    diff = pixels[:, :, 2] - pixels[:, :, 0]
-    alpha = np.clip((ALPHA_HIGH - diff) / ALPHA_RANGE, 0.0, 1.0)[:, :, None]
+    # 2) 白色信封居中（源图 bbox 垂直中心略偏下，向上补一点视觉平衡）
+    offset_x = (CANVAS - envelope.width) // 2
+    offset_y = (CANVAS - envelope.height) // 2 - 6
+    artwork.alpha_composite(envelope, (offset_x, offset_y))
 
-    # 3) 合成：信封保留原像素，其余用干净渐变替换
-    composed = pixels * alpha + background * (1.0 - alpha)
-    composed = np.clip(composed, 0, 255).astype(np.uint8)
-
-    artwork = Image.fromarray(composed, mode="RGB")
-    print(f"源图 {width}x{height}，信封覆盖率 {(alpha > 0.5).mean() * 100:.1f}%")
-
-    # 4) 套圆角遮罩并放入 Apple 图标网格
-    artwork = artwork.resize((ARTWORK, ARTWORK), Image.LANCZOS).convert("RGBA")
+    # 3) 套圆角遮罩并放入 Apple 图标网格
+    artwork = artwork.resize((ARTWORK, ARTWORK), Image.LANCZOS)
     artwork.putalpha(squircle_mask(ARTWORK))
 
     master = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
@@ -73,7 +68,7 @@ def main() -> None:
     )
     print(f"已写出 {ico_path}（{os.path.getsize(ico_path) // 1024} KB）")
 
-    # 5) 生成 .iconset 并调用 iconutil 打包 icns
+    # 4) 生成 .iconset 并调用 iconutil 打包 icns
     if os.path.isdir(ICONSET):
         shutil.rmtree(ICONSET)
     os.makedirs(ICONSET)

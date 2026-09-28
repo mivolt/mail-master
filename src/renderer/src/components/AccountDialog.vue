@@ -29,6 +29,8 @@ function blankForm(): AccountInput {
 }
 
 const form = ref<AccountInput>(blankForm())
+// 两步流程：先选服务商（大图标卡片），再填邮箱与密码。编辑已有账号直接进表单。
+const step = ref<'pick' | 'form'>('form')
 // 邮箱拆成两段输入：只填 @ 前面，域名由服务商带出。
 // 这样邮箱永远是「完整本地部分 + 完整域名」拼出来的，
 // 不存在逐字输入中途被当成最终值的情况。
@@ -53,6 +55,12 @@ const secretPlaceholder = computed(() =>
 // 邮箱拼完整后再给帮助入口，避免一打开就堆教程
 const canGuide = computed(() => form.value.email.includes('@'))
 const errorText = computed(() => (feedback.value?.kind === 'error' ? feedback.value.text : ''))
+
+function domainHint(item: (typeof PROVIDERS)[number]): string {
+  if (item.domains.length === 0) return '手动填写收发服务器'
+  if (item.domains.length === 1) return item.domains[0]
+  return `${item.domains[0]} 等 ${item.domains.length} 个域名`
+}
 
 function syncEmail(): void {
   const local = localPart.value.trim()
@@ -79,6 +87,7 @@ function applyPreset(id: ProviderId): void {
 function selectProvider(id: ProviderId): void {
   form.value.provider = id
   applyPreset(id)
+  step.value = 'form'
   const target = presetById(id)
   if (id === 'custom') {
     domain.value = ''
@@ -123,6 +132,7 @@ watch(
 
     const account = ui.editingAccount
     if (account) {
+      step.value = 'form'
       form.value = {
         email: account.email,
         displayName: account.displayName,
@@ -140,8 +150,10 @@ watch(
       localPart.value = at > 0 ? account.email.slice(0, at) : account.email
       domain.value = at > 0 ? account.email.slice(at + 1) : ''
       usernameTouched.value = true
-      advancedOpen.value = true
+      // 编辑时服务器设置默认收起：高频改动是密码，服务器参数在「服务器设置」里
+      advancedOpen.value = false
     } else {
+      step.value = 'pick'
       form.value = blankForm()
       localPart.value = ''
       domain.value = presetById('qq').domains[0] ?? ''
@@ -266,27 +278,57 @@ async function remove(): Promise<void> {
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3.5">
-      <!-- 先选服务商，邮箱只需要填 @ 前面 -->
-      <div class="mb-1 text-[12px] text-muted">服务商</div>
-      <div class="flex flex-wrap gap-1.5">
-        <button
-          v-for="item in PROVIDERS"
-          :key="item.id"
-          type="button"
-          :data-provider="item.id"
-          class="h-7 rounded-md px-2.5 text-[12px]"
-          :class="
-            form.provider === item.id
-              ? 'bg-accent font-medium text-white'
-              : 'border border-line text-ink2 hover:bg-hover'
-          "
-          @click="selectProvider(item.id)"
-        >
-          {{ item.shortLabel }}
-        </button>
-      </div>
+      <!-- 第一步：选服务商（对齐 Foxmail 的大图标选择页） -->
+      <template v-if="step === 'pick'">
+        <p class="mb-3 text-[12px] leading-relaxed text-muted">
+          选择邮箱服务商，收发服务器会自动填好；之后只需要填邮箱和密码。
+        </p>
+        <div class="space-y-1.5">
+          <button
+            v-for="item in PROVIDERS"
+            :key="item.id"
+            type="button"
+            :data-provider="item.id"
+            class="flex w-full items-center gap-3 rounded-xl border border-line px-3 py-2.5 text-left hover:bg-hover"
+            @click="selectProvider(item.id)"
+          >
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+              :style="{ backgroundColor: item.brandColor }"
+            >
+              <Icon name="mail" :size="20" filled class="text-white" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-[13px] font-medium text-ink">{{ item.label }}</span>
+              <span class="block truncate text-[11px] text-faint">{{ domainHint(item) }}</span>
+            </span>
+            <Icon name="chevron-right" :size="12" class="shrink-0 text-faint" />
+          </button>
+        </div>
+      </template>
 
-      <label class="mt-3 block">
+      <!-- 第二步：填邮箱与密码 -->
+      <template v-else>
+        <button
+          v-if="!isEdit"
+          type="button"
+          class="mb-2 flex items-center gap-0.5 text-[12px] text-muted hover:text-ink"
+          @click="step = 'pick'"
+        >
+          <Icon name="chevron-left" :size="11" />
+          重选服务商
+        </button>
+        <div v-else class="mb-3 flex items-center gap-2.5 rounded-lg border border-line px-2.5 py-2">
+          <span
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+            :style="{ backgroundColor: preset.brandColor }"
+          >
+            <Icon name="mail" :size="14" filled class="text-white" />
+          </span>
+          <span class="min-w-0 text-[12.5px] font-medium text-ink">{{ preset.label }}</span>
+        </div>
+
+        <label class="block">
         <span class="mb-1 block text-[12px] text-muted">邮箱地址</span>
         <div class="flex items-stretch">
           <input
@@ -410,12 +452,12 @@ async function remove(): Promise<void> {
       <button
         type="button"
         class="hint-trigger mt-1"
-        title="显示名称、登录用户名与收发服务器地址"
+        title="登录用户名与收发服务器地址、端口、加密方式"
         @click="advancedOpen = !advancedOpen"
       >
         <Icon name="settings" :size="12" class="shrink-0" />
         <span class="flex-1 truncate">
-          高级设置<span class="text-faint"> · 显示名称与服务器地址</span>
+          服务器设置<span class="text-faint"> · 用户名与收发服务器地址</span>
         </span>
         <Icon :name="advancedOpen ? 'chevron-down' : 'chevron-right'" :size="11" class="shrink-0" />
       </button>
@@ -507,6 +549,8 @@ async function remove(): Promise<void> {
           </p>
         </div>
       </div>
+
+      </template>
 
       <Transition name="reveal">
         <div

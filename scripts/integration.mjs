@@ -291,11 +291,15 @@ const initialPanel = await page.evaluate(() => {
   }
 })
 check(
-  '添加账号弹窗默认只有两个输入框',
-  initialPanel.inputs === 2 && initialPanel.hasLocalField,
-  `${initialPanel.inputs} 个可见输入框`
+  '添加账号先选服务商，默认没有任何输入框',
+  initialPanel.inputs === 0 && initialPanel.providerChips === 5,
+  `${initialPanel.inputs} 个输入框，${initialPanel.providerChips} 张卡片`
 )
-check('服务商以按钮组形式先选', initialPanel.providerChips === 5, `${initialPanel.providerChips} 个`)
+check(
+  '服务商以大图标卡片先选',
+  initialPanel.providerChips === 5 && initialPanel.hasLocalField === false,
+  `${initialPanel.providerChips} 张卡片`
+)
 check(
   '未填邮箱时不展示获取步骤（避免过早信息）',
   initialPanel.hasGuideTrigger === false && initialPanel.hasSteps === false,
@@ -360,7 +364,7 @@ check('展开后说明授权码形态', openedGuide.text.includes('不是你的�
 await page.screenshot({ path: join(shotDir, '12-account-guide.png') })
 
 // 认证失败时错误要醒目，并自动展开帮助
-await page.locator('.dialog-panel button', { hasText: '高级设置' }).first().click()
+await page.locator('.dialog-panel button', { hasText: '服务器设置' }).first().click()
 await page.waitForTimeout(500)
 await page.fill('.dialog-panel input[data-field="imapHost"]', '127.0.0.1')
 await page.locator('.dialog-panel input[data-field="imapPort"]').fill(String(imapPort))
@@ -483,6 +487,9 @@ await page.waitForTimeout(400)
 //    之前正是因此漏掉了「打包后添加账号报 An object could not be cloned」。
 await page.locator('button', { hasText: '添加邮箱账号' }).first().click()
 await page.waitForTimeout(700)
+// 两步流程：先是大图标服务商选择页，点卡片才进表单
+const pickPage = await page.evaluate(() => document.body.innerText.includes('选择邮箱服务商'))
+check('添加账号先展示服务商选择页', pickPage, '')
 // 自定义服务商：域名也由用户填；本地部分逐字输入
 await page.locator('.dialog-panel button[data-provider="custom"]').click()
 await page.waitForTimeout(500)

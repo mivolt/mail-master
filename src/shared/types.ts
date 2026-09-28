@@ -5,6 +5,8 @@ export interface ProviderPreset {
   label: string
   /** 服务商选择按钮上的短标签 */
   shortLabel: string
+  /** 服务商品牌色，用在选择卡片的图标底色上 */
+  brandColor: string
   domains: string[]
   imapHost: string
   imapPort: number

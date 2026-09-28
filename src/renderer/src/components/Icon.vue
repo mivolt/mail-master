@@ -20,6 +20,7 @@ const PATHS: Record<string, string> = {
   plus: 'M8 3.2v9.6 M3.2 8h9.6',
   close: 'M4 4l8 8 M12 4l-8 8',
   'chevron-right': 'M6 3.5 10.5 8 6 12.5',
+  'chevron-left': 'M10 3.5 5.5 8l4.5 4.5',
   'chevron-down': 'M3.5 6 8 10.5 12.5 6',
   paperclip:
     'M11.6 6.4 6.9 11.1a2.5 2.5 0 0 1-3.5-3.5l5.2-5.2a1.7 1.7 0 0 1 2.4 2.4l-5.2 5.2a.85.85 0 0 1-1.2-1.2l4.6-4.6',

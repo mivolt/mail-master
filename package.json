@@ -10,7 +10,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "icons": "${MIMO_PYTHON:-python3} scripts/make-icon.py && ${MIMO_PYTHON:-python3} scripts/make-tray-icon.py",
+    "icons": "node scripts/make-icon-envelope.cjs && ${MIMO_PYTHON:-python3} scripts/make-icon.py && ${MIMO_PYTHON:-python3} scripts/make-tray-icon.py",
     "preflight": "node scripts/preflight.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
