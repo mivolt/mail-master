@@ -1,7 +1,7 @@
 import { Menu, Tray, nativeImage } from 'electron'
 // 图标很小（<1KB），Vite 会内联成 data URL，因此不必处理开发/打包的路径差异。
-// 1x 与 2x 必须分别注册为两个表示：只给 2x 图会被当成 32pt 渲染，
-// 菜单栏里比邻居图标大一圈（正是「图标太大」反馈的根源）。
+// 1x 与 2x 必须分别注册为两个表示：macOS 菜单栏用 22×22 / 44×44，
+// 只给 @2x 图会被当成 44pt 渲染，比邻居图标大一圈。
 import trayTemplate1x from '../../resources/trayTemplate.png'
 import trayTemplate2x from '../../resources/trayTemplate@2x.png'
 import trayWindows1x from '../../resources/trayWindows.png'

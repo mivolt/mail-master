@@ -254,3 +254,27 @@ export function buildCidMap(
   }
   return map
 }
+
+/**
+ * 富文本正文派生纯文本部分（multipart 的 text/plain）。
+ * 只求可读：块级结构转换行、列表加圆点、剥掉其余标签与样式。
+ */
+export function htmlToPlainText(html: string): string {
+  let prepared = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|tr|blockquote)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/li>/gi, '\n')
+
+  let root: HTMLElement
+  try {
+    root = parseHtml(prepared, { comment: false })
+  } catch {
+    prepared = escapeHtml(prepared)
+    root = parseHtml(prepared, { comment: false })
+  }
+  const text = root.text.replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim()
+  return text
+}

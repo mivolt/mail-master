@@ -62,13 +62,13 @@ jobs:
         include:
           - os: macos-14
             artifact: macos
-            build_args: '--mac -c.mac.identity=null'
+            build_args: '--mac --arm64 --x64 -c.mac.identity=null'
           - os: windows-latest
             artifact: windows
-            build_args: '--win'
+            build_args: '--win --x64 --arm64'
           - os: ubuntu-latest
             artifact: linux
-            build_args: '--linux'
+            build_args: '--linux --x64 --arm64'
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -103,6 +103,7 @@ jobs:
         # --publish never 必须加：electron-builder 在 CI 里检测到 git tag 会
         # 「隐式发布」，而它需要 GH_TOKEN，未设置就直接失败。
         # 发布由后面的 publish job 统一负责。
+        # afterPack 钩子会在 DMG 打包前完成 ad-hoc 重签，保证签名进入产物。
         run: npx electron-builder ${{ matrix.build_args }} --publish never
 
       - name: 校验产物架构（仅 macOS）

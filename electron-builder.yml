@@ -6,6 +6,9 @@ directories:
   output: release
   buildResources: build
 
+# mac 打包后、DMG 构建前做 ad-hoc 重签，保证签名进入最终产物
+afterPack: scripts/after-pack-mac.cjs
+
 files:
   - out/**/*
   - package.json
@@ -13,15 +16,10 @@ files:
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns
-  # dmg 同时产出 arm64 与 x64：arm64 跟随构建机，x64 交叉构建。
-  # 在 Apple 芯片上运行 x64 版本会走 Rosetta，macOS 26 起会弹出
-  # 「基于 Intel 的 App 支持即将结束」的警告，并提示 macOS 28 将无法运行。
-  # 只出单架构时用 npm run dist:mac / dist:mac:x64（CLI 的 arch 参数会覆盖这里的列表）。
-  target:
-    - target: dmg
-      arch:
-        - arm64
-        - x64
+  # 架构由调用方显式指定：本地 dist:mac / dist:mac:x64 各出一种，
+  # CI 同时传 --arm64 --x64 构建两种。不要在这里固定 arch，
+  # 否则 target.arch 会盖过本地命令的单架构参数。
+  target: dmg
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
@@ -46,11 +44,7 @@ dmg:
 
 win:
   icon: build/icon.ico
-  target:
-    - target: nsis
-      arch:
-        - x64
-        - arm64
+  target: nsis
 
 nsis:
   # 不做一键安装：让用户能选安装目录，这是 Windows 桌面软件的常规预期
@@ -71,17 +65,8 @@ linux:
   # 与 dmg/nsis 同理：显式命名，避免多架构产物互相覆盖
   artifactName: Mail-Master-${version}-${arch}.${ext}
   target:
-    - target: AppImage
-      arch:
-        - x64
-        - arm64
-    - target: deb
-      arch:
-        - x64
-        - arm64
-    - target: rpm
-      arch:
-        - x64
-        - arm64
+    - AppImage
+    - deb
+    - rpm
 
 npmRebuild: false

@@ -85,6 +85,45 @@ export type FolderIconName =
   | 'archive'
   | 'folder'
 
+/**
+ * 文件夹显示名。服务器返回的常见英文名（INBOX/Drafts/Sent…）映射成中文，
+ * 中文原名原样保留；specialUse 标记兜底。仅影响显示，数据层保持服务器原名。
+ */
+const FOLDER_NAME_CN: Record<string, string> = {
+  inbox: '收件箱',
+  drafts: '草稿箱',
+  sent: '已发送',
+  'sent messages': '已发送',
+  'sent items': '已发送',
+  junk: '垃圾邮件',
+  'junk e-mail': '垃圾邮件',
+  'bulk mail': '垃圾邮件',
+  spam: '垃圾邮件',
+  trash: '已删除',
+  deleted: '已删除',
+  'deleted messages': '已删除'
+}
+
+export function folderDisplayName(name: string, specialUse?: string | null): string {
+  if (/[\u4e00-\u9fff]/.test(name)) return name
+  const mapped = FOLDER_NAME_CN[name.trim().toLowerCase()]
+  if (mapped) return mapped
+  switch (specialUse) {
+    case '\\Inbox':
+      return '收件箱'
+    case '\\Drafts':
+      return '草稿箱'
+    case '\\Sent':
+      return '已发送'
+    case '\\Junk':
+      return '垃圾邮件'
+    case '\\Trash':
+      return '已删除'
+    default:
+      return name
+  }
+}
+
 export function folderIconName(specialUse: string | null, path: string): FolderIconName {
   switch (specialUse) {
     case '\\Inbox':

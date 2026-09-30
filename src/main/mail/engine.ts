@@ -23,6 +23,10 @@ const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 const RECONNECT_BASE_DELAY = 3000
 const RECONNECT_MAX_DELAY = 60000
 const OTHER_FOLDER_MIN_WINDOW = 30
+/** NOOP 保活间隔：部分企业服务器在 IDLE 期间不主动推送 EXISTS，靠 NOOP 触发它吐出积压通知 */
+const NOOP_INTERVAL_MS = 60_000
+/** 全量同步兜底间隔：即使 IDLE 与 NOOP 都失效，新邮件也能在几分钟内被发现 */
+const FULL_SYNC_FALLBACK_MS = 300_000
 
 export interface EngineHooks {
   onProgress?: (progress: SyncProgress) => void
@@ -65,6 +69,8 @@ export class AccountWorker {
   private resyncTimer: NodeJS.Timeout | null = null
   private syncing = false
   private inboxKnownTotal = -1
+  private noopTimer: NodeJS.Timeout | null = null
+  private fullSyncTimer: NodeJS.Timeout | null = null
 
   constructor(
     readonly accountId: number,
@@ -166,6 +172,37 @@ export class AccountWorker {
       if (this.stopped) return
       void this.sync().catch(() => undefined)
     }, delay)
+  }
+
+  /**
+   * 双保险轮询。很多老企业 IMAP（如内网 Coremail 系）在 IDLE 期间不推送
+   * EXISTS，只靠 IDLE 感知新邮件会「反应慢」甚至完全无感：
+   * ① 每 60 秒 NOOP——服务器会补发积压的 EXISTS，触发既有新邮件链路；
+   * ② 每 5 分钟一次全量同步——即使前两层全失效也能兜底发现并弹通知。
+   */
+  private startPolling(): void {
+    this.stopPolling()
+    this.noopTimer = setInterval(() => {
+      if (this.stopped || this.syncing) return
+      const client = this.client
+      if (!client?.usable) return
+      this.enqueue(() => client.noop()).catch(() => undefined)
+    }, NOOP_INTERVAL_MS)
+    this.fullSyncTimer = setInterval(() => {
+      if (this.stopped || this.syncing) return
+      void this.sync().catch(() => undefined)
+    }, FULL_SYNC_FALLBACK_MS)
+  }
+
+  private stopPolling(): void {
+    if (this.noopTimer) {
+      clearInterval(this.noopTimer)
+      this.noopTimer = null
+    }
+    if (this.fullSyncTimer) {
+      clearInterval(this.fullSyncTimer)
+      this.fullSyncTimer = null
+    }
   }
 
   private async disconnect(): Promise<void> {
@@ -450,15 +487,13 @@ export class AccountWorker {
     return this.enqueue(async () => {
       const client = await this.connect()
       const settings = currentOrDefault()
-      const window = Math.max(
-        OTHER_FOLDER_MIN_WINDOW,
-        Math.round(settings.syncWindow / 5)
-      )
+      // 点击文件夹是用户明确想看，窗口给足完整的设置值
+      // （后台自动同步的已发送/草稿才用缩小窗口）
       const count = await this.syncFolder(
         client,
         account,
         folder,
-        window,
+        settings.syncWindow,
         false,
         settings.bodyPrefetch
       )
@@ -492,12 +527,14 @@ export class AccountWorker {
   startWatch(): void {
     this.stopped = false
     this.watchEnabled = true
+    this.startPolling()
     void this.sync().catch(() => undefined)
   }
 
   async stop(): Promise<void> {
     this.stopped = true
     this.watchEnabled = false
+    this.stopPolling()
     if (this.retryTimer) {
       clearTimeout(this.retryTimer)
       this.retryTimer = null

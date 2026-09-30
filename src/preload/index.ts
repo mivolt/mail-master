@@ -15,6 +15,8 @@ import type {
   OpenMessageEvent,
   SendInput,
   SendResult,
+  Signature,
+  SignatureStore,
   StorageInfo,
   SyncProgress,
   SyncResult,
@@ -68,7 +70,8 @@ const api: MailMasterApi = {
     openExternal: (url: string): Promise<void> => invoke(CH.appOpenExternal, url),
     storageInfo: (): Promise<StorageInfo> => invoke(CH.appStorageInfo),
     openDataDir: (): Promise<void> => invoke(CH.appOpenDataDir),
-    clearData: (): Promise<boolean> => invoke(CH.appClearData)
+    clearData: (): Promise<boolean> => invoke(CH.appClearData),
+    testNotification: (): Promise<void> => invoke(CH.appTestNotification)
   },
   settings: {
     get: (): Promise<AppSettings> => invoke(CH.settingsGet),
@@ -107,6 +110,14 @@ const api: MailMasterApi = {
   compose: {
     pickFiles: (): Promise<OutgoingAttachment[]> => invoke(CH.composePickFiles),
     send: (input: SendInput): Promise<SendResult> => invoke(CH.composeSend, input)
+  },
+  signatures: {
+    getAll: (): Promise<SignatureStore> => invoke(CH.signatureGetAll),
+    save: (input: { id?: string; name: string; html: string }): Promise<Signature> =>
+      invoke(CH.signatureSave, input),
+    remove: (id: string): Promise<void> => invoke(CH.signatureDelete, id),
+    setDefault: (accountId: number | null, signatureId: string | null): Promise<void> =>
+      invoke(CH.signatureSetDefault, accountId, signatureId)
   },
   events: {
     onProgress: (cb: (payload: SyncProgress) => void): Unsubscribe => subscribe(EV.progress, cb),

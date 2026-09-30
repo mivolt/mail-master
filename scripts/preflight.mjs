@@ -32,6 +32,21 @@ function read(relative) {
   return existsSync(path) ? readFileSync(path, 'utf8') : null
 }
 
+function readBytes(relative) {
+  const path = join(root, relative)
+  return existsSync(path) ? readFileSync(path) : null
+}
+
+function pngInfo(relative) {
+  const raw = readBytes(relative)
+  if (!raw || raw.length < 26 || raw.toString('ascii', 1, 4) !== 'PNG') return null
+  return {
+    width: raw.readUInt32BE(16),
+    height: raw.readUInt32BE(20),
+    colorType: raw[25]
+  }
+}
+
 function readJson(relative) {
   const raw = read(relative)
   if (!raw) return null
@@ -189,13 +204,42 @@ function readJson(relative) {
   const required = [
     'build/icon.icns', // macOS 应用图标
     'build/icon.ico', // Windows 应用图标
-    'resources/trayTemplate@2x.png', // macOS 菜单栏（模板图）
-    'resources/trayWindows@2x.png', // Windows 任务栏（彩色图）
+    'resources/trayTemplate.png', // macOS 菜单栏 22px（模板图）
+    'resources/trayTemplate@2x.png', // macOS 菜单栏 44px Retina（模板图）
+    'resources/trayWindows.png', // Windows / Linux 托盘 1x（彩色图）
+    'resources/trayWindows@2x.png', // Windows / Linux 托盘 2x（彩色图）
     ...Array.from({ length: 9 }, (_, i) => `resources/badges/badge-${i + 1}.png`),
     'resources/badges/badge-9plus.png' // Windows 任务栏角标
   ]
   const missing = required.filter((file) => !existsSync(join(root, file)))
   done(missing.length === 0, `${required.length} 个文件`, `缺失：${missing.join(', ')}`)
+}
+
+// ---------------------------------------------------- macOS 菜单栏模板图规范
+{
+  const done = check(
+    'macOS 菜单栏模板图符合 22pt / Retina 规范',
+    '模板图必须是 22×22 / 44×44 的 RGBA PNG（黑色线条 + 透明 alpha），并以 1x / 2x 双表示注册。\n' +
+      '修复：npm run icons，并检查 tray.ts 的 addRepresentation 与 setTemplateImage(true)'
+  )
+  const one = pngInfo('resources/trayTemplate.png')
+  const two = pngInfo('resources/trayTemplate@2x.png')
+  const traySource = read('src/main/tray.ts') ?? ''
+  const dimensions =
+    one?.width === 22 && one?.height === 22 && two?.width === 44 && two?.height === 44
+  // PNG color type 6 = RGBA；0/2 是无 alpha 的灰度/RGB，会显示方形背景
+  const rgba = one?.colorType === 6 && two?.colorType === 6
+  const registered =
+    traySource.includes('scaleFactor: 1') &&
+    traySource.includes('scaleFactor: 2') &&
+    traySource.includes('setTemplateImage(true)')
+  done(
+    dimensions && rgba && registered,
+    '22×22 / 44×44 RGBA，1x / 2x 双表示，template=true',
+    `1x=${one ? `${one.width}×${one.height} type${one.colorType}` : '缺失'} ` +
+      `2x=${two ? `${two.width}×${two.height} type${two.colorType}` : '缺失'} ` +
+      `注册=${registered}`
+  )
 }
 
 // ------------------------------------------------------------ 图标已内联进产物

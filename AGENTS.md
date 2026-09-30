@@ -118,6 +118,10 @@ npx electron-builder --mac -c.mac.identity=null
   `responseText` / `executedCommand` / `authenticationFailed` 上，必须还原后展示
 - **imapflow**：每次 SELECT / 重新打开邮箱都会因计数变化发 `exists`，不能直接用
   `prevCount` 判新邮件，必须与本地已知总数比对
+- **部分企业 IMAP 服务器在 IDLE 期间不推送 EXISTS**（内网老服务器实测如此）：
+  只靠 IDLE 感知新邮件会「反应慢」甚至完全无感。引擎必须有双保险——
+  60 秒 NOOP 保活（触发服务器补发积压 EXISTS）+ 5 分钟全量同步兜底，
+  见 `engine.ts` 的 `startPolling`
 - **imapflow**：服务器广告 SASL-IR 时会走 `AUTHENTICATE PLAIN` 并 base64 内联凭据，
   按字面匹配密码的脱敏抓不到，必须按协议语义脱敏（见 `mail/diagnostics.ts`）
 - **网易 163/126 与 QQ**：要求客户端发送 IMAP `ID`，imapflow 的 `clientInfo` 自动处理
@@ -161,9 +165,10 @@ npx electron-builder --mac -c.mac.identity=null
   自动适配深浅色）；**Windows 不支持模板图**，必须用彩色实心图标，否则深色
   任务栏上看不见。见 `resources/trayTemplate*` 与 `resources/trayWindows*`。
   Linux 复用 Windows 彩色图。
-- **托盘图标必须 1x + 2x 双表示注册**：`nativeImage.addRepresentation`
-  分别挂 16px 与 32px；只加载 @2x 图（data URL 不带 DPI 信息）会被当成
-  32pt 渲染——菜单栏里比邻居图标大一圈，还发虚。
+- **macOS 菜单栏模板图必须按规范制作**：22pt 逻辑画布，图形控制在
+  18pt 视觉安全区；PNG 用黑色线条 + 透明 alpha，`setTemplateImage(true)`；
+  `nativeImage.addRepresentation` 分别挂 22px 与 44px。只加载 @2x 图
+  （data URL 不带 DPI 信息）会被当成 44pt 渲染——比邻居图标大一圈，还发虚。
 - **Linux 的平台差异**（与 macOS / Windows 逐项核对过的）：托盘用彩色图、
   无 Dock / 任务栏角标（`applyBadge` 在 Linux 为 no-op）、开机自启未支持
   （`applyLaunchAtLogin` 提前返回，设置里的开关用 `SettingDefinition.platforms`
@@ -193,3 +198,12 @@ npx electron-builder --mac -c.mac.identity=null
 - 邮件正文在 `sandbox="allow-popups"` iframe 中渲染，主进程负责净化
 - 远程图片默认拦截并改写为占位图，原地址存 `data-blocked-src`，用户显式点击才加载
 - TypeScript 锁 5.9：TS 7 是 Go 重写版，与 vue-tsc / Volar 的兼容性未验证
+- **技术栈保持 Electron + Vue，不整体换 Rust / Tauri**：历史痛点（收信慢、
+  通知不弹、TLS 降级）都在协议层与系统集成，换栈一个也解决不了；包体/内存
+  成为硬约束或出现可测量的性能热点时，优先把单个模块用 Rust N-API 编译进
+  现有外壳，而不是重写。QQ NT（Electron 渲染 + C++ 内核）证明这条路线撑得住
+  亿级用户
+- **若将来做移动端**：先接受 iOS「打开时同步」的弱推送形态——iOS 禁止第三方
+  长期后台 IMAP 连接，服务器中转会违背隐私承诺（见产品思路里的移动端说明），
+  架构解决不了这条政策约束。技术上走「共享协议内核（Rust/C++）+ 各端壳」：
+  桌面留 Electron、移动用原生或 Flutter 壳，不为一套代码把桌面体验倒退

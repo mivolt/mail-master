@@ -11,6 +11,8 @@ import type {
   OpenMessageEvent,
   SendInput,
   SendResult,
+  Signature,
+  SignatureStore,
   StorageInfo,
   SyncProgress,
   SyncResult,
@@ -35,6 +37,7 @@ export interface MailMasterApi {
     storageInfo(): Promise<StorageInfo>
     openDataDir(): Promise<void>
     clearData(): Promise<boolean>
+    testNotification(): Promise<void>
   }
   settings: {
     get(): Promise<AppSettings>
@@ -67,6 +70,12 @@ export interface MailMasterApi {
   compose: {
     pickFiles(): Promise<OutgoingAttachment[]>
     send(input: SendInput): Promise<SendResult>
+  }
+  signatures: {
+    getAll(): Promise<SignatureStore>
+    save(input: { id?: string; name: string; html: string }): Promise<Signature>
+    remove(id: string): Promise<void>
+    setDefault(accountId: number | null, signatureId: string | null): Promise<void>
   }
   events: {
     onProgress(cb: (payload: SyncProgress) => void): Unsubscribe

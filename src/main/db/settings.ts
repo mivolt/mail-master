@@ -20,6 +20,14 @@ export function writeSetting(key: string, value: string): void {
     .run(key, value)
 }
 
+/** 读取未纳入 AppSettings 结构的自由键（签名等 JSON 数据） */
+export function getRawSetting(key: string): string | null {
+  const row = getDb()
+    .prepare('SELECT value FROM settings WHERE key = ?')
+    .get(key) as unknown as { value: string } | undefined
+  return row?.value ?? null
+}
+
 export function currentOrDefault(): AppSettings {
   try {
     return readSettings()

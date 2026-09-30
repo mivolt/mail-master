@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import Icon from './Icon.vue'
+import BrandMark from './BrandMark.vue'
 import Modal from './Modal.vue'
 import { PROVIDERS, detectProvider, presetById } from '@shared/presets'
 import type { AccountInput, ProviderId } from '@shared/types'
@@ -292,12 +293,7 @@ async function remove(): Promise<void> {
             class="flex w-full items-center gap-3 rounded-xl border border-line px-3 py-2.5 text-left hover:bg-hover"
             @click="selectProvider(item.id)"
           >
-            <span
-              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-              :style="{ backgroundColor: item.brandColor }"
-            >
-              <Icon name="mail" :size="20" filled class="text-white" />
-            </span>
+            <BrandMark :provider="item.id" :size="40" />
             <span class="min-w-0 flex-1">
               <span class="block text-[13px] font-medium text-ink">{{ item.label }}</span>
               <span class="block truncate text-[11px] text-faint">{{ domainHint(item) }}</span>
@@ -319,12 +315,7 @@ async function remove(): Promise<void> {
           重选服务商
         </button>
         <div v-else class="mb-3 flex items-center gap-2.5 rounded-lg border border-line px-2.5 py-2">
-          <span
-            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-            :style="{ backgroundColor: preset.brandColor }"
-          >
-            <Icon name="mail" :size="14" filled class="text-white" />
-          </span>
+          <BrandMark :provider="form.provider" :size="28" />
           <span class="min-w-0 text-[12.5px] font-medium text-ink">{{ preset.label }}</span>
         </div>
 

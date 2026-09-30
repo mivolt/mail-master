@@ -147,6 +147,20 @@ export interface SendResult {
   error?: string
 }
 
+export interface Signature {
+  id: string
+  name: string
+  /** 富文本 HTML 片段（发送前会经主进程净化） */
+  html: string
+  updatedAt: number
+}
+
+export interface SignatureStore {
+  signatures: Signature[]
+  /** accountId → 默认签名 id */
+  defaults: Record<string, string>
+}
+
 export interface TestResult {
   ok: boolean
   error?: string

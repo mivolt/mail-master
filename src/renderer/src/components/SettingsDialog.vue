@@ -1,19 +1,96 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import Modal from './Modal.vue'
+import RichToolbar from './RichToolbar.vue'
 import { SETTINGS, SETTING_GROUPS, type AppSettings, type PlatformId } from '@shared/settings'
+import type { SignatureStore } from '@shared/types'
 import type { StorageInfo } from '@shared/types'
+import { useAccountsStore } from '../stores/accounts'
 import { useSettingsStore } from '../stores/settings'
 import { useUiStore } from '../stores/ui'
 import { formatBytes } from '../lib/format'
+import { plain } from '../lib/plain'
 
 const ui = useUiStore()
 const settings = useSettingsStore()
+const accounts = useAccountsStore()
 
 const storage = ref<StorageInfo | null>(null)
 const loadingStorage = ref(false)
 const clearing = ref(false)
+
+const signatureStore = ref<SignatureStore>({ signatures: [], defaults: {} })
+const editingSignature = ref<{ id?: string; name: string; html: string } | null>(null)
+const sigEditor = ref<HTMLElement | null>(null)
+
+async function loadSignatures(): Promise<void> {
+  try {
+    signatureStore.value = await window.api.signatures.getAll()
+  } catch {
+    signatureStore.value = { signatures: [], defaults: {} }
+  }
+}
+
+function signatureNameFor(id: string | undefined): string {
+  if (!id) return ''
+  return signatureStore.value.signatures.find((item) => item.id === id)?.name ?? ''
+}
+
+function startSignatureEdit(signature?: { id: string; name: string; html: string }): void {
+  editingSignature.value = signature
+    ? { id: signature.id, name: signature.name, html: signature.html }
+    : { name: '', html: '' }
+  void nextTick(() => {
+    if (sigEditor.value) {
+      sigEditor.value.innerHTML = editingSignature.value?.html ?? ''
+      sigEditor.value.focus()
+    }
+  })
+}
+
+function cancelSignatureEdit(): void {
+  editingSignature.value = null
+}
+
+async function saveSignatureEdit(): Promise<void> {
+  const draft = editingSignature.value
+  if (!draft) return
+  if (!draft.name.trim()) {
+    ui.toast('error', '请先给签名起个名字')
+    return
+  }
+  try {
+    await window.api.signatures.save(
+      plain({ id: draft.id, name: draft.name.trim(), html: sigEditor.value?.innerHTML ?? '' })
+    )
+    editingSignature.value = null
+    await loadSignatures()
+    ui.toast('success', '签名已保存')
+  } catch (cause) {
+    ui.toast('error', cause instanceof Error ? cause.message : String(cause))
+  }
+}
+
+async function removeSignature(id: string, name: string): Promise<void> {
+  try {
+    await window.api.signatures.remove(id)
+    await loadSignatures()
+    ui.toast('info', `已删除签名「${name}」`)
+  } catch (cause) {
+    ui.toast('error', cause instanceof Error ? cause.message : String(cause))
+  }
+}
+
+async function onDefaultChange(accountId: number, event: Event): Promise<void> {
+  const value = (event.target as HTMLSelectElement).value
+  try {
+    await window.api.signatures.setDefault(accountId, value || null)
+    await loadSignatures()
+  } catch (cause) {
+    ui.toast('error', cause instanceof Error ? cause.message : String(cause))
+  }
+}
 
 const grouped = computed(() =>
   SETTING_GROUPS.map((group) => ({
@@ -64,13 +141,25 @@ async function loadStorage(): Promise<void> {
 watch(
   () => ui.settingsOpen,
   (open) => {
-    if (open) void loadStorage()
+    if (open) {
+      void loadStorage()
+      void loadSignatures()
+    }
   }
 )
 
 async function openDataDir(): Promise<void> {
   try {
     await window.api.app.openDataDir()
+  } catch (cause) {
+    ui.toast('error', cause instanceof Error ? cause.message : String(cause))
+  }
+}
+
+async function testNotification(): Promise<void> {
+  try {
+    await window.api.app.testNotification()
+    ui.toast('info', '测试通知已发出；若没看到，请检查「系统设置 → 通知」里是否允许 Mail Master')
   } catch (cause) {
     ui.toast('error', cause instanceof Error ? cause.message : String(cause))
   }
@@ -145,6 +234,134 @@ async function clearData(): Promise<void> {
           </div>
         </div>
       </template>
+
+      <p class="mb-2 text-[11px] font-medium tracking-wide text-faint">通知</p>
+      <div class="mb-4 rounded-lg border border-line px-3 py-2.5">
+        <div class="flex items-center gap-2">
+          <div class="min-w-0 flex-1">
+            <p class="text-[12px] text-ink">测试系统通知</p>
+            <p class="mt-0.5 text-[11px] leading-relaxed text-faint">
+              点一下应该弹出通知，应用也会出现在「系统设置 → 通知」列表里。没弹就说明被系统拦了。
+            </p>
+          </div>
+          <button
+            type="button"
+            data-action="test-notification"
+            class="flex h-7 shrink-0 items-center rounded-md border border-line px-2.5 text-[11.5px] text-ink2 hover:bg-hover hover:text-ink"
+            @click="testNotification()"
+          >
+            发送测试
+          </button>
+        </div>
+      </div>
+
+      <p class="mb-2 text-[11px] font-medium tracking-wide text-faint">签名</p>
+      <div class="mb-4 rounded-lg border border-line px-3 py-2.5">
+        <template v-if="editingSignature">
+          <input
+            v-model="editingSignature.name"
+            data-field="signatureName"
+            type="text"
+            placeholder="签名名称，如：工作签名"
+            class="h-8 w-full rounded-md border border-line bg-bg px-2.5 text-[12.5px] focus:border-accent focus:outline-none"
+          />
+          <div class="mt-2 rounded-md border border-line px-1.5 py-1">
+            <RichToolbar />
+          </div>
+          <div
+            ref="sigEditor"
+            data-field="signatureBody"
+            contenteditable="true"
+            class="mt-1.5 min-h-[72px] rounded-md border border-line bg-bg px-2.5 py-2 text-[12.5px] leading-relaxed text-ink empty:before:content-['签名内容…支持加粗、颜色、链接等格式'] empty:before:text-faint focus:border-accent focus:outline-none"
+          />
+          <div class="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              class="flex h-7 items-center rounded-md border border-line px-2.5 text-[11.5px] text-ink2 hover:bg-hover"
+              @click="cancelSignatureEdit()"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              data-action="signature-save"
+              class="flex h-7 items-center rounded-md bg-accent px-3 text-[11.5px] font-medium text-white hover:opacity-90"
+              @click="saveSignatureEdit()"
+            >
+              保存签名
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="signature in signatureStore.signatures"
+            :key="signature.id"
+            class="flex items-center gap-2 border-b border-line py-1.5 last:border-b-0"
+          >
+            <Icon name="compose" :size="12" class="shrink-0 text-faint" />
+            <span class="min-w-0 flex-1 truncate text-[12px] text-ink">{{ signature.name }}</span>
+            <button
+              type="button"
+              class="shrink-0 rounded px-1.5 text-[11.5px] text-muted hover:bg-hover hover:text-ink"
+              @click="startSignatureEdit(signature)"
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              class="shrink-0 rounded px-1.5 text-[11.5px] text-danger hover:bg-danger-bg"
+              @click="removeSignature(signature.id, signature.name)"
+            >
+              删除
+            </button>
+          </div>
+          <p v-if="!signatureStore.signatures.length" class="py-1.5 text-[11.5px] text-faint">
+            还没有签名。创建后写信时会自动带上。
+          </p>
+
+          <div
+            v-if="accounts.list.length && signatureStore.signatures.length"
+            class="mt-2 space-y-1 border-t border-line pt-2"
+          >
+            <div
+              v-for="account in accounts.list"
+              :key="account.id"
+              class="flex items-center gap-2"
+            >
+              <span class="min-w-0 flex-1 truncate text-[11.5px] text-ink2" :title="account.email">
+                {{ account.email }}
+              </span>
+              <select
+                :value="signatureStore.defaults[String(account.id)] ?? ''"
+                :data-field="'signatureDefault'"
+                :data-account="account.id"
+                class="h-7 max-w-[55%] rounded-md border border-line bg-bg px-1.5 text-[11.5px] text-ink2 focus:outline-none"
+                @change="onDefaultChange(account.id, $event)"
+              >
+                <option value="">不使用签名</option>
+                <option v-for="signature in signatureStore.signatures" :key="signature.id" :value="signature.id">
+                  {{ signature.name }}
+                </option>
+              </select>
+            </div>
+            <p class="pt-0.5 text-[10.5px] leading-relaxed text-faint">
+              写新邮件时，正文为空会自动填入该账号的默认签名。
+            </p>
+          </div>
+
+          <button
+            v-if="!editingSignature"
+            type="button"
+            data-action="signature-new"
+            class="mt-2 flex h-7 items-center gap-1 rounded-md border border-line px-2.5 text-[11.5px] text-ink2 hover:bg-hover hover:text-ink"
+            @click="startSignatureEdit()"
+          >
+            <Icon name="plus" :size="11" />
+            新建签名
+          </button>
+        </template>
+      </div>
 
       <p class="mb-2 text-[11px] font-medium tracking-wide text-faint">数据</p>
       <div class="rounded-lg border border-line px-3 py-2.5">

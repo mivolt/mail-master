@@ -441,7 +441,7 @@ await page.locator('aside button', { hasText: '设置' }).first().click()
 await page.waitForSelector('.dialog-panel select[data-setting="syncWindow"]', { timeout: 8000 })
 await page.waitForTimeout(300)
 const settingsText = await page.evaluate(() => document.body.innerText)
-check('设置面板打开', settingsText.includes('每个文件夹保留邮件数'), '')
+check('设置面板打开', settingsText.includes('每个文件夹同步最近'), '')
 check('设置含同步项', settingsText.includes('自动下载正文'), '')
 check('设置含隐私项', settingsText.includes('默认不加载远程图片'), '')
 check('设置含通用项', settingsText.includes('开机时自动启动'), '')
@@ -703,8 +703,9 @@ const expandedInert = await page.evaluate(() => {
 })
 check('展开后 inert 被移除（文件夹可点击）', expandedInert === false, String(expandedInert))
 
-const sentHeader = await openSidebarItem('Sent Mail', 'Sent Mail')
-check('点击文件夹后列表切换到该文件夹', sentHeader.includes('Sent Mail'), sentHeader.slice(0, 90))
+// 文件夹显示名已中文化：服务器返回的 Sent Mail 在界面上显示为「已发送」
+const sentHeader = await openSidebarItem('已发送', '已发送')
+check('点击文件夹后列表切换到该文件夹', sentHeader.includes('已发送'), sentHeader.slice(0, 90))
 check(
   '已发送文件夹内容已同步',
   sentHeader.includes('已发送的邮件'),
@@ -728,7 +729,7 @@ check(
   !unreadViewBody.includes('已发送的邮件'),
   ''
 )
-check('跨文件夹视图标出邮件来源文件夹', unreadViewBody.includes('INBOX'), '')
+check('跨文件夹视图标出邮件来源文件夹', unreadViewBody.includes('收件箱'), '')
 
 const unreadBadge = await page.evaluate(() => {
   const row = [...document.querySelectorAll('aside button')].find((button) =>
@@ -909,11 +910,30 @@ await page.screenshot({ path: join(shotDir, '05-reader-attachment.png') })
 // 7. 写信：走界面真实发送，覆盖写信页里响应式数组跨 IPC 的序列化
 await page.locator('button', { hasText: '写邮件' }).first().click()
 await page.waitForTimeout(700)
-const composeVisible = await page.evaluate(() => document.body.innerText.includes('发件账号'))
+// 新布局：发件账号在底部栏，收件人行带「抄送/密送」入口
+const composeVisible = await page.evaluate(() => document.body.innerText.includes('收件人'))
 check('写信弹窗打开', composeVisible, '')
+check(
+  '写信底部有发件账号栏',
+  await page.evaluate(() => Boolean(document.querySelector('.dialog-panel select[data-field="sender"]'))),
+  ''
+)
+check(
+  '写信有富文本工具栏',
+  await page.evaluate(() => Boolean(document.querySelector('.dialog-panel button[title="加粗"]'))),
+  ''
+)
 await page.fill('.dialog-panel input[data-field="to"]', 'peer@example.com')
 await page.fill('.dialog-panel input[data-field="subject"]', '界面发信测试')
-await page.fill('.dialog-panel textarea[data-field="body"]', '这封邮件是从界面发出的。')
+// 正文是 contenteditable 富文本：点击聚焦后逐字插入
+const composeBody = page.locator('.dialog-panel [data-field="body"]')
+await composeBody.click()
+await page.keyboard.insertText('这封邮件是从界面发出的。')
+await page.waitForTimeout(300)
+const composedText = await page.evaluate(
+  () => document.querySelector('.dialog-panel [data-field="body"]')?.textContent?.trim() ?? ''
+)
+check('写信正文已输入', composedText.includes('这封邮件是从界面发出的'), composedText.slice(0, 60))
 await page.screenshot({ path: join(shotDir, '06-compose.png') })
 
 const sentBefore = sentMessages.length
@@ -1078,6 +1098,58 @@ check(
 const newMailToast = await page.evaluate(() => document.body.innerText)
 check('新邮件在应用内出现提示', newMailToast.includes('收到'), '')
 await page.screenshot({ path: join(shotDir, '19-new-mail.png') })
+
+// 10. 签名：设置里创建 → 绑定账号默认 → 写信自动带入
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+await page.locator('aside button', { hasText: '设置' }).first().click()
+await page.waitForSelector('.dialog-panel [data-action="signature-new"]', { timeout: 8000 })
+check(
+  '设置里有签名管理区',
+  await page.evaluate(() => document.body.innerText.includes('新建签名')),
+  ''
+)
+
+await page.locator('[data-action="signature-new"]').click()
+await page.waitForTimeout(300)
+await page.fill('.dialog-panel input[data-field="signatureName"]', '日常签名')
+const signatureBody = page.locator('.dialog-panel [data-field="signatureBody"]')
+await signatureBody.click()
+await page.keyboard.insertText('此邮件由 Mail Master 发送')
+await page.locator('[data-action="signature-save"]').click()
+await page.waitForTimeout(500)
+check(
+  '签名创建后出现在列表',
+  await page.evaluate(() => document.body.innerText.includes('日常签名')),
+  ''
+)
+
+const sigDefault = page.locator('.dialog-panel select[data-field="signatureDefault"]').first()
+await sigDefault.selectOption({ label: '日常签名' })
+await page.waitForTimeout(500)
+const sigState = await page.evaluate(() => window.api.signatures.getAll())
+const boundId = Object.values(sigState.defaults)[0]
+check(
+  '账号默认签名已持久化',
+  Boolean(boundId) && sigState.signatures.some((item) => item.id === boundId),
+  JSON.stringify(sigState.defaults)
+)
+
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+
+await page.locator('button', { hasText: '写邮件' }).first().click()
+await page.waitForTimeout(700)
+const autoSignature = await page.evaluate(
+  () => document.querySelector('.dialog-panel [data-field="body"]')?.textContent?.trim() ?? ''
+)
+check(
+  '新邮件自动带入默认签名',
+  autoSignature.includes('此邮件由 Mail Master 发送'),
+  autoSignature.slice(0, 60)
+)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(300)
 
 await app.close()
 await new Promise((resolve) => server.close(resolve))

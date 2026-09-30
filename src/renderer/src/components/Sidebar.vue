@@ -4,7 +4,7 @@ import Icon from './Icon.vue'
 import { useAccountsStore } from '../stores/accounts'
 import { useMailStore, type Selection } from '../stores/mail'
 import { useUiStore } from '../stores/ui'
-import { folderIconName, folderRank } from '../lib/format'
+import { folderDisplayName, folderIconName, folderRank } from '../lib/format'
 import type { Folder } from '@shared/types'
 
 const accounts = useAccountsStore()
@@ -61,7 +61,7 @@ async function selectFolder(folder: Folder): Promise<void> {
     kind: 'folder',
     accountId: folder.accountId,
     folderId: folder.id,
-    label: folder.name
+    label: folderDisplayName(folder.name, folder.specialUse)
   })
   await mail.syncFolderIfEmpty()
 }
@@ -126,24 +126,32 @@ async function selectFolder(folder: Folder): Promise<void> {
 
           <button
             type="button"
-            class="no-press flex min-w-0 flex-1 items-center gap-2 py-[7px] text-left"
+            class="no-press flex min-w-0 flex-1 items-center gap-2 py-[5px] text-left"
             :class="isActive({ accountId: account.id }) ? 'text-accent-ink' : 'text-ink'"
             @click="selectAccountInbox(account.id, account.displayName || account.email)"
           >
+            <!-- 账号色标：竖向渐变条，比圆点更贴近行高、视觉更稳 -->
             <span
-              class="h-2 w-2 shrink-0 rounded-full"
-              :style="{ background: account.color }"
+              class="h-[22px] w-[3px] shrink-0 rounded-full"
+              :style="{
+                background: `linear-gradient(180deg, ${account.color} 0%, ${account.color}55 100%)`
+              }"
               aria-hidden="true"
             />
-            <span
-              class="flex-1 truncate text-[12.5px]"
-              :class="accounts.unreadOf(account.id) ? 'font-semibold' : ''"
-            >
-              {{ account.displayName || account.email }}
+            <span class="min-w-0 flex-1">
+              <span
+                class="block truncate text-[12.5px] leading-[16px]"
+                :class="accounts.unreadOf(account.id) ? 'font-semibold' : ''"
+              >
+                {{ account.displayName || account.email }}
+              </span>
+              <span class="block truncate text-[10.5px] leading-[13px] text-faint">
+                {{ account.email }}
+              </span>
             </span>
             <span
               v-if="accounts.unreadOf(account.id)"
-              class="rounded-full bg-accent/15 px-1.5 text-[11px] font-semibold text-accent-ink"
+              class="shrink-0 rounded-full bg-accent/15 px-1.5 text-[11px] font-semibold text-accent-ink"
             >
               {{ accounts.unreadOf(account.id) }}
             </span>
@@ -183,7 +191,7 @@ async function selectFolder(folder: Folder): Promise<void> {
                   class="flex-1 truncate text-[12.5px]"
                   :class="folder.unread ? 'font-medium' : ''"
                 >
-                  {{ folder.name }}
+                  {{ folderDisplayName(folder.name, folder.specialUse) }}
                 </span>
                 <span v-if="folder.unread" class="text-[11px] text-faint">{{ folder.unread }}</span>
               </button>

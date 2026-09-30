@@ -8,6 +8,7 @@ import { SMTPServer } from 'smtp-server'
 import {
   buildCidMap,
   buildEmailDocument,
+  htmlToPlainText,
   parseMessageSource,
   sanitizeEmailHtml
 } from '../src/main/mail/parser'
@@ -333,6 +334,26 @@ async function testSmtp(): Promise<void> {
 await testErrorReporting()
 await testParser()
 await testSmtp()
+
+// ===== 富文本正文派生纯文本（multipart 的 text/plain） =====
+{
+  const cases: { name: string; html: string; want: string }[] = [
+    { name: '段落转换行', html: '<p>你好</p><p>世界</p>', want: '你好\n世界' },
+    { name: 'br 转换行', html: '第一行<br>第二行', want: '第一行\n第二行' },
+    { name: '列表加圆点', html: '<ul><li>甲</li><li>乙</li></ul>', want: '• 甲\n• 乙' },
+    { name: '剥掉脚本样式', html: '<script>alert(1)</script><style>p{}</style>正文', want: '正文' },
+    { name: '实体正确解码', html: 'a&amp;b &lt;c&gt;', want: 'a&b <c>' },
+    {
+      name: '连续空行压缩',
+      html: '<div>一</div><div><br><br><br></div><div>二</div>',
+      want: '一\n\n二'
+    }
+  ]
+  for (const item of cases) {
+    const got = htmlToPlainText(item.html)
+    check(item.name, got === item.want, got.replace(/\n/g, '␤'))
+  }
+}
 
 const failed = results.filter((item) => !item.ok)
 for (const item of results) {

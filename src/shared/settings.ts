@@ -37,8 +37,9 @@ export const SETTINGS: SettingDefinition[] = [
   {
     key: 'syncWindow',
     group: 'sync',
-    label: '每个文件夹保留邮件数',
-    description: '本地缓存最近多少封邮件。调大能离线翻看更多历史，代价是占用更多磁盘、首次同步更慢。',
+    label: '每个文件夹同步最近',
+    description:
+      '每个文件夹拉取最近多少封邮件的列表与正文（超出部分点击单封时按需下载）。邮件被服务商分到其他文件夹时（如 QQ 的订阅邮件），在侧栏点开该文件夹即可拉取。',
     type: 'select',
     options: [
       { value: '100', label: '最近 100 封' },
@@ -76,7 +77,7 @@ export const SETTINGS: SettingDefinition[] = [
     group: 'general',
     label: '新邮件时发送系统通知',
     description:
-      '窗口不在前台时通过系统通知提醒，点击可直达那封邮件。窗口就在眼前时只用应用内提示，不会重复打扰。',
+      '窗口不在前台时通过系统通知提醒，点击可直达那封邮件。若从未弹出过，请到「系统设置 → 通知」里允许 Mail Master。',
     type: 'toggle',
     default: 'true'
   },

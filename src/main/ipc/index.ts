@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, shell } from 'electron'
 import { copyFileSync, existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { CH, EV } from '@shared/channels'
@@ -29,15 +29,26 @@ import type { MailEngine } from '../mail/engine'
 import { connectImap, listRemoteFolders, type ImapConfig } from '../mail/imap'
 import { runDiagnostics } from '../mail/diagnostics'
 import { describeMailError, withTimeout, AUTH_HINT } from '../mail/errors'
-import { buildEmailDocument, buildPlainTextDocument, sanitizeEmailHtml } from '../mail/parser'
+import { buildEmailDocument, buildPlainTextDocument, htmlToPlainText, sanitizeEmailHtml } from '../mail/parser'
 import { sendMail, verifySmtp, type SmtpConfig } from '../mail/smtp'
+import {
+  deleteSignature,
+  loadSignatureStore,
+  saveSignature,
+  setSignatureDefault
+} from '../signatures'
+import type { Signature, SignatureStore } from '@shared/types'
 import { decryptSecret, encryptSecret } from '../security/vault'
 import { clearAllData, storageInfo } from '../storage'
 import { notifyNewMail } from '../notifications'
 import { updateTrayUnread } from '../tray'
 import { applyBadge } from '../badge'
 
-function pickColor(): string {
+function pickColor(email: string): string {
+  // 新账号优先用服务商品牌色（QQ 蓝、163 绿…），视觉上和认知一致；
+  // 没有品牌色的自定义邮箱再按顺序轮询调色板
+  const preset = detectProvider(email)
+  if (preset.brandColor) return preset.brandColor
   const existing = accountsRepo.listAccounts().length
   return ACCOUNT_COLORS[existing % ACCOUNT_COLORS.length]
 }
@@ -171,6 +182,26 @@ export function registerIpc(ctx: IpcContext): void {
     if (error) throw new Error(error)
   })
 
+  // 主动发一条通知：一是让用户验证系统通知是否就绪，二是触发 macOS
+  // 通知中心的注册——应用只有发出过通知才会出现在「系统设置 → 通知」里
+  ipcMain.handle(CH.appTestNotification, async (): Promise<void> => {
+    if (!Notification.isSupported()) throw new Error('当前系统不支持通知')
+    const window = ctx.getWindow()
+    const notification = new Notification({
+      title: 'Mail Master 通知测试',
+      body: '能看到这条，说明系统通知已就绪。',
+      silent: false
+    })
+    notification.on('click', () => {
+      if (window && !window.isDestroyed()) {
+        if (window.isMinimized()) window.restore()
+        window.show()
+        window.focus()
+      }
+    })
+    notification.show()
+  })
+
   ipcMain.handle(CH.appClearData, async (): Promise<boolean> => {
     const window = ctx.getWindow()
     const options = {
@@ -288,7 +319,11 @@ export function registerIpc(ctx: IpcContext): void {
       throw new Error(describeMailError(error).message)
     }
 
-    const id = accountsRepo.createAccount(input, encryptSecret(input.secret), input.color || pickColor())
+    const id = accountsRepo.createAccount(
+      input,
+      encryptSecret(input.secret),
+      input.color || pickColor(input.email)
+    )
     const account = accountsRepo.findAccount(id)
     if (!account) throw new Error('账号创建失败')
 
@@ -432,6 +467,14 @@ export function registerIpc(ctx: IpcContext): void {
     const secret = decryptSecret(accountsRepo.getAccountSecretEnc(input.accountId))
     if (!secret) return { ok: false, error: '无法解密该账号的密码，请重新编辑账号并输入密码' }
 
+    // 富文本正文过一遍净化（防粘贴进来的脚本），纯文本部分由 HTML 派生
+    const html = input.html?.trim() ? sanitizeEmailHtml(input.html, { blockRemoteImages: false }) : ''
+    const payload: SendInput = {
+      ...input,
+      html: html || undefined,
+      text: input.text?.trim() || (html ? htmlToPlainText(html) : '')
+    }
+
     try {
       await sendMail(
         {
@@ -441,7 +484,7 @@ export function registerIpc(ctx: IpcContext): void {
           user: account.username,
           pass: secret
         },
-        input,
+        payload,
         { name: account.displayName, address: account.email }
       )
       void engine.syncAccount(account.id).catch(() => undefined)
@@ -450,6 +493,25 @@ export function registerIpc(ctx: IpcContext): void {
       return { ok: false, error: describeMailError(error).message }
     }
   })
+
+  ipcMain.handle(CH.signatureGetAll, (): SignatureStore => loadSignatureStore())
+
+  ipcMain.handle(
+    CH.signatureSave,
+    (_event, input: { id?: string; name: string; html: string }): Signature =>
+      saveSignature(input ?? {})
+  )
+
+  ipcMain.handle(CH.signatureDelete, (_event, id: string): void => {
+    if (typeof id === 'string' && id) deleteSignature(id)
+  })
+
+  ipcMain.handle(
+    CH.signatureSetDefault,
+    (_event, accountId: number | null, signatureId: string | null): void => {
+      setSignatureDefault(accountId ?? null, signatureId ?? null)
+    }
+  )
 }
 
 export function attachEngineHooks(ctx: IpcContext): void {

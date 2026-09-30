@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import { useMailStore } from '../stores/mail'
-import { avatarColor, formatListDate, initialOf, senderLabel } from '../lib/format'
+import { avatarColor, folderDisplayName, formatListDate, initialOf, senderLabel } from '../lib/format'
 
 const mail = useMailStore()
 
@@ -73,7 +73,8 @@ async function toggleStar(id: number): Promise<void> {
     <div class="shrink-0 border-b border-line px-3 pt-3 pb-2">
       <div class="flex items-baseline gap-2">
         <h1 class="truncate text-[15px] font-semibold text-ink">{{ mail.selection.label }}</h1>
-        <span class="shrink-0 text-[12px] text-faint">{{ mail.total }}</span>
+        <!-- 数字后带「封」表明是总数，避免被误读成未读数 -->
+        <span class="shrink-0 text-[12px] text-faint">{{ mail.total }} 封</span>
       </div>
 
       <div class="mt-2 flex items-center gap-2">
@@ -177,7 +178,7 @@ async function toggleStar(id: number): Promise<void> {
                 v-if="mail.spansFolders"
                 class="max-w-[84px] shrink-0 truncate rounded bg-hover px-1 py-px text-[10.5px] text-faint"
               >
-                {{ item.folderName }}
+                {{ folderDisplayName(item.folderName) }}
               </span>
               <span class="ml-auto shrink-0 text-[11px] text-faint">
                 {{ formatListDate(item.date) }}
